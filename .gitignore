@@ -1,0 +1,22 @@
+# 1. 시스템 및 에디터 파일
+.DS_Store
+._*
+.vscode
+
+# 2. 의존성 모듈 (절대 올리면 안 됨 - 용량 큼)
+node_modules
+web/node_modules
+
+# 3. Next.js 빌드 결과물 (여기가 400개의 주범!)
+.next
+web/.next
+out
+build
+
+# 4. 환경 변수 (보안 - 키 값 유출 방지)
+.env
+.env.local
+*.env
+*.env.local
+web/.env
+web/.env.local
