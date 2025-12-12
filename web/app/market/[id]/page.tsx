@@ -13,7 +13,7 @@ type Post = {
   image_url: string | null;
   price: number | null;
   contact_url: string | null;
-  user_id: string | null; // 👤 작성자 ID 추가
+  user_id: string | null;
 };
 
 export default function MarketDetail() {
@@ -22,46 +22,39 @@ export default function MarketDetail() {
   const id = params.id;
 
   const [post, setPost] = useState<Post | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null); // 현재 접속한 유저
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
-
-      // 1. 글 정보 가져오기
       const { data: postData } = await supabase
         .from('posts')
         .select('*')
         .eq('id', id)
         .single();
       setPost(postData);
-
-      // 2. 현재 로그인한 내 정보 가져오기
       const {
         data: { user },
       } = await supabase.auth.getUser();
       setCurrentUser(user);
-
       setLoading(false);
     };
-
     fetchData();
   }, [id]);
 
-  // 🗑️ 삭제 함수 (비밀번호 입력 X, 바로 삭제)
   const handleDelete = async () => {
-    const confirmDelete = confirm('정말 삭제하시겠습니까?');
-    if (!confirmDelete) return;
-
+    if (!confirm('정말 삭제하시겠습니까?')) return;
     const { error } = await supabase.from('posts').delete().eq('id', id);
-
-    if (error) {
-      alert('삭제 실패 😢');
-    } else {
+    if (!error) {
       alert('삭제되었습니다!');
       router.push('/market');
     }
+  };
+
+  // ✏️ 수정 페이지로 이동
+  const handleEdit = () => {
+    router.push(`/edit/${id}`);
   };
 
   const handleChat = () => {
@@ -85,7 +78,6 @@ export default function MarketDetail() {
       </div>
     );
 
-  // 🛡️ 내 글인지 확인 (내 아이디 == 글쓴이 아이디)
   const isMyPost =
     currentUser && post.user_id && currentUser.id === post.user_id;
 
@@ -102,14 +94,22 @@ export default function MarketDetail() {
           <h1 className="font-bold text-lg text-black">상품 상세</h1>
         </div>
 
-        {/* 🚨 내 글일 때만 삭제 버튼 표시! */}
+        {/* 🚨 내 글일 때만: 수정/삭제 버튼 표시 */}
         {isMyPost && (
-          <button
-            onClick={handleDelete}
-            className="text-red-500 p-2 text-sm font-bold border border-red-200 rounded-lg hover:bg-red-50 transition"
-          >
-            🗑️ 삭제
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleEdit}
+              className="text-blue-500 p-2 text-sm font-bold border border-blue-200 rounded-lg hover:bg-blue-50 transition"
+            >
+              ✏️ 수정
+            </button>
+            <button
+              onClick={handleDelete}
+              className="text-red-500 p-2 text-sm font-bold border border-red-200 rounded-lg hover:bg-red-50 transition"
+            >
+              🗑️ 삭제
+            </button>
+          </div>
         )}
       </header>
 

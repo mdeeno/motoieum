@@ -1,11 +1,9 @@
-// web/app/market/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
 
-// 타입 정의
 type Post = {
   id: number;
   title: string;
@@ -13,7 +11,7 @@ type Post = {
   created_at: string;
   image_url: string | null;
   price: number | null;
-  category: string; // 📂 카테고리 추가
+  category: string;
 };
 
 export default function MarketPage() {
@@ -21,9 +19,10 @@ export default function MarketPage() {
   const [activeTab, setActiveTab] = useState<'market' | 'community' | 'map'>(
     'market'
   );
-  const [user, setUser] = useState<any>(null); // 👤 로그인 유저 정보
+  const [user, setUser] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
 
-  // 로그인 상태 확인
   useEffect(() => {
     const checkUser = async () => {
       const {
@@ -32,14 +31,11 @@ export default function MarketPage() {
       setUser(user);
     };
     checkUser();
-
-    // 로그인/로그아웃 변화 감지
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setUser(session?.user ?? null);
       }
     );
-
     return () => authListener.subscription.unsubscribe();
   }, []);
 
@@ -53,7 +49,7 @@ export default function MarketPage() {
       {/* 🟢 헤더 */}
       <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
-          <div className="flex items-center gap-10">
+          <div className="flex items-center gap-4 md:gap-10">
             <h1
               className="text-2xl font-black italic tracking-wide text-blue-600 cursor-pointer"
               onClick={() => setActiveTab('market')}
@@ -78,18 +74,48 @@ export default function MarketPage() {
               />
             </nav>
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex gap-2 items-center">
+            {/* 🔍 검색 버튼 */}
+            {showSearch ? (
+              <div className="flex items-center bg-gray-100 rounded-full px-3 py-1 animate-fadeIn">
+                <input
+                  type="text"
+                  placeholder="제목 검색..."
+                  className="bg-transparent border-none focus:outline-none text-sm w-32 md:w-48"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <button
+                  onClick={() => {
+                    setShowSearch(false);
+                    setSearchTerm('');
+                  }}
+                  className="text-gray-400 hover:text-red-500 ml-1"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSearch(true)}
+                className="p-2 text-gray-500 hover:bg-gray-100 rounded-full"
+              >
+                🔍
+              </button>
+            )}
+
             {user ? (
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 text-gray-600 text-sm font-bold hover:bg-gray-100 rounded-lg"
+                className="px-3 py-1.5 text-gray-600 text-xs md:text-sm font-bold hover:bg-gray-100 rounded-lg whitespace-nowrap"
               >
                 로그아웃
               </button>
             ) : (
               <button
                 onClick={() => router.push('/login')}
-                className="px-5 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-800 transition"
+                className="px-4 py-1.5 bg-gray-900 text-white rounded-full text-xs md:text-sm font-bold hover:bg-gray-800 transition whitespace-nowrap"
               >
                 로그인
               </button>
@@ -100,10 +126,13 @@ export default function MarketPage() {
 
       {/* 🟠 메인 컨텐츠 */}
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 pb-28 md:pb-8">
-        {/* 탭에 따라 필터링해서 보여주기 */}
-        {activeTab === 'market' && <PostListView category="market" />}
-        {activeTab === 'community' && <PostListView category="community" />}
-        {activeTab === 'map' && <MapPlaceholder />}
+        {activeTab === 'market' && (
+          <PostListView category="market" searchTerm={searchTerm} />
+        )}
+        {activeTab === 'community' && (
+          <PostListView category="community" searchTerm={searchTerm} />
+        )}
+        {activeTab === 'map' && <ShopListView />}
       </main>
 
       {/* 🔵 모바일 탭바 */}
@@ -153,23 +182,46 @@ export default function MarketPage() {
   );
 }
 
-// 📋 통합 게시글 리스트 뷰 (장터/커뮤니티 공용)
-function PostListView({ category }: { category: string }) {
+// 📋 통합 게시글 리스트 (샘플 데이터 없음! 진짜 데이터만!)
+function PostListView({
+  category,
+  searchTerm,
+}: {
+  category: string;
+  searchTerm: string;
+}) {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
 
   useEffect(() => {
     const fetchPosts = async () => {
-      // 📂 카테고리에 맞는 글만 가져오기!
-      const { data } = await supabase
+      // 1. 기본 쿼리: 해당 카테고리의 글만 가져옴
+      let query = supabase
         .from('posts')
         .select('*')
-        .eq('category', category) // 핵심: 여기서 필터링
         .order('created_at', { ascending: false });
-      setPosts(data || []);
+
+      // 💡 중요: 카테고리 필터링 (옛날 글은 카테고리가 없을 수 있으므로 예외 처리)
+      if (category === 'market') {
+        // 장터 탭이면: category가 'market'이거나 비어있는(null) 옛날 글도 보여줘라!
+        query = query.or(`category.eq.market,category.is.null`);
+      } else {
+        // 커뮤니티 탭이면: category가 'community'인 것만!
+        query = query.eq('category', 'community');
+      }
+
+      // 2. 검색어가 있으면 제목에서 검색
+      if (searchTerm) {
+        query = query.ilike('title', `%${searchTerm}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) console.error(error);
+      else setPosts(data || []);
     };
+
     fetchPosts();
-  }, [category]);
+  }, [category, searchTerm]);
 
   return (
     <div className="space-y-6">
@@ -178,13 +230,20 @@ function PostListView({ category }: { category: string }) {
           category === 'market' ? 'text-gray-800' : 'text-blue-800'
         }`}
       >
-        {category === 'market' ? '🔥 실시간 인기 매물' : '🗣️ 라이더들의 수다'}
+        {searchTerm
+          ? `🔍 '${searchTerm}' 검색 결과`
+          : category === 'market'
+          ? '🔥 실시간 인기 매물'
+          : '🗣️ 라이더들의 수다'}
       </h2>
 
       {posts.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
-          <p>아직 등록된 글이 없어요 😢</p>
-          <p className="text-sm">우측 하단 + 버튼을 눌러 첫 글을 써보세요!</p>
+          <p>
+            {searchTerm
+              ? '검색 결과가 없어요 😢'
+              : '아직 등록된 글이 없어요 😢'}
+          </p>
         </div>
       ) : (
         <div
@@ -205,7 +264,7 @@ function PostListView({ category }: { category: string }) {
               }`}
             >
               {category === 'market' ? (
-                // 🏷️ 장터 카드 디자인
+                // 🏷️ 장터 카드
                 <>
                   <div className="w-32 sm:w-full sm:h-52 bg-gray-100 relative overflow-hidden shrink-0">
                     {item.image_url ? (
@@ -229,12 +288,12 @@ function PostListView({ category }: { category: string }) {
                       </div>
                     </div>
                     <span className="font-extrabold text-lg sm:text-xl text-gray-900">
-                      {item.price?.toLocaleString()}원
+                      {item.price ? item.price.toLocaleString() : 0}원
                     </span>
                   </div>
                 </>
               ) : (
-                // 💬 커뮤니티 리스트 디자인
+                // 💬 커뮤니티 리스트
                 <>
                   <div className="flex-1 min-w-0 pr-4">
                     <h3 className="font-bold text-gray-900 text-base truncate mb-1 group-hover:text-blue-600 transition">
@@ -265,16 +324,74 @@ function PostListView({ category }: { category: string }) {
   );
 }
 
-// 나머지 컴포넌트들
-function MapPlaceholder() {
+// 🗺️ 정비소 리스트 (이건 샘플 데이터가 맞습니다! 정비소 탭에서만 보임)
+function ShopListView() {
+  const SHOPS = [
+    {
+      id: 1,
+      name: '성수 혼다 강남점',
+      loc: '서울 성동구',
+      phone: '02-123-4567',
+      tag: '공식',
+    },
+    {
+      id: 2,
+      name: '모토이음 정비센터',
+      loc: '서울 마포구',
+      phone: '010-0000-0000',
+      tag: '제휴',
+    },
+    {
+      id: 3,
+      name: '야마하 관악점',
+      loc: '서울 관악구',
+      phone: '02-987-6543',
+      tag: '공식',
+    },
+    {
+      id: 4,
+      name: '베스파 용산점',
+      loc: '서울 용산구',
+      phone: '02-555-5555',
+      tag: '전문',
+    },
+  ];
+
   return (
-    <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6 bg-white rounded-3xl border border-dashed border-gray-300 m-4">
-      <div className="text-8xl mb-6 grayscale opacity-50">🗺️</div>
-      <h2 className="text-3xl font-black text-gray-800 mb-4">MAP SERVICE</h2>
-      <p className="text-gray-500">정비 지도는 준비 중입니다.</p>
+    <div className="space-y-4">
+      <h2 className="text-xl font-extrabold text-gray-800 px-2">
+        📍 내 주변 추천 정비소
+      </h2>
+      {SHOPS.map((shop) => (
+        <div
+          key={shop.id}
+          className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center"
+        >
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-bold text-white ${
+                  shop.tag === '공식' ? 'bg-red-500' : 'bg-blue-500'
+                }`}
+              >
+                {shop.tag}
+              </span>
+              <h3 className="font-bold text-gray-900">{shop.name}</h3>
+            </div>
+            <p className="text-gray-500 text-sm">📍 {shop.loc}</p>
+          </div>
+          <button
+            onClick={() => window.open(`tel:${shop.phone}`)}
+            className="bg-gray-100 p-3 rounded-full text-xl"
+          >
+            📞
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
+
 function HeaderTab({ label, isActive, onClick }: any) {
   return (
     <button
