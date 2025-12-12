@@ -1,3 +1,4 @@
+// web/app/write/page.tsx
 'use client';
 
 import { useState, useRef } from 'react';
@@ -7,7 +8,8 @@ import { useRouter } from 'next/navigation';
 export default function WritePage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [price, setPrice] = useState(''); // 💰 가격 입력값 (문자로 받음)
+  const [price, setPrice] = useState('');
+  const [contactLink, setContactLink] = useState(''); // 💬 채팅 주소 저장
   const [image, setImage] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -15,14 +17,14 @@ export default function WritePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !content) return alert('제목과 내용을 모두 입력해주세요.');
+    if (!title || !content || !price)
+      return alert('제목, 가격, 내용을 모두 입력해주세요.');
 
     setIsLoading(true);
 
     try {
       let imageUrl = null;
 
-      // 1. 이미지 업로드
       if (image) {
         const fileExt = image.name.split('.').pop();
         const fileName = `${Date.now()}.${fileExt}`;
@@ -40,19 +42,20 @@ export default function WritePage() {
         imageUrl = urlData.publicUrl;
       }
 
-      // 2. 글 저장 (가격 포함)
+      // 💬 연락처 링크(contact_url)도 같이 저장
       const { error } = await supabase.from('posts').insert([
         {
           title,
           content,
-          price: price ? parseInt(price) : null, // 숫자로 변환해서 저장
+          price: parseInt(price),
+          contact_url: contactLink, // 채팅 주소 저장
           image_url: imageUrl,
         },
       ]);
 
       if (error) {
         console.error(error);
-        alert('글 저장에 실패했습니다.');
+        alert('글 저장 실패 😢');
       } else {
         alert('글이 등록되었습니다! 🎉');
         router.push('/market');
@@ -79,7 +82,6 @@ export default function WritePage() {
           className="border p-3 rounded-lg w-full text-black bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
         />
 
-        {/* 💰 가격 입력창 */}
         <input
           type="number"
           placeholder="가격 (원) - 숫자만 입력"
@@ -87,6 +89,18 @@ export default function WritePage() {
           onChange={(e) => setPrice(e.target.value)}
           className="border p-3 rounded-lg w-full text-black bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
         />
+
+        {/* 💬 오픈채팅 주소 입력칸 추가 */}
+        <input
+          type="text"
+          placeholder="카카오톡 오픈채팅 주소 (선택사항)"
+          value={contactLink}
+          onChange={(e) => setContactLink(e.target.value)}
+          className="border p-3 rounded-lg w-full text-black bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+        />
+        <p className="text-xs text-gray-500 -mt-2 pl-1">
+          * 카카오톡 오픈채팅방 링크를 넣으면 구매자와 바로 연결됩니다.
+        </p>
 
         <textarea
           placeholder="내용 (연식, 키로수, 튜닝 내역 등)"
