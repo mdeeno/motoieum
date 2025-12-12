@@ -13,6 +13,7 @@ type Post = {
   image_url: string | null;
   price: number | null;
   contact_url: string | null;
+  user_id: string | null; // 👤 작성자 ID 추가
 };
 
 export default function MarketDetail() {
@@ -21,58 +22,53 @@ export default function MarketDetail() {
   const id = params.id;
 
   const [post, setPost] = useState<Post | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null); // 현재 접속한 유저
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchPost = async () => {
+    const fetchData = async () => {
       if (!id) return;
-      const { data, error } = await supabase
+
+      // 1. 글 정보 가져오기
+      const { data: postData } = await supabase
         .from('posts')
         .select('*')
         .eq('id', id)
         .single();
+      setPost(postData);
 
-      if (error) console.error(error);
-      else setPost(data);
+      // 2. 현재 로그인한 내 정보 가져오기
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setCurrentUser(user);
+
       setLoading(false);
     };
 
-    fetchPost();
+    fetchData();
   }, [id]);
 
-  // 🗑️ 글 삭제 함수 (비밀번호 확인)
+  // 🗑️ 삭제 함수 (비밀번호 입력 X, 바로 삭제)
   const handleDelete = async () => {
-    const password = prompt(
-      '글을 삭제하려면 관리자 비밀번호를 입력하세요. (힌트: 1234)'
-    );
+    const confirmDelete = confirm('정말 삭제하시겠습니까?');
+    if (!confirmDelete) return;
 
-    if (password === '1234') {
-      const confirmDelete = confirm('정말 삭제하시겠습니까?');
-      if (!confirmDelete) return;
+    const { error } = await supabase.from('posts').delete().eq('id', id);
 
-      const { error } = await supabase.from('posts').delete().eq('id', id);
-
-      if (error) {
-        alert('삭제 실패 😢');
-        console.error(error);
-      } else {
-        alert('삭제되었습니다!');
-        router.push('/market'); // 삭제 후 목록으로 이동
-      }
-    } else if (password !== null) {
-      alert('비밀번호가 틀렸습니다!');
+    if (error) {
+      alert('삭제 실패 😢');
+    } else {
+      alert('삭제되었습니다!');
+      router.push('/market');
     }
   };
 
-  // 💬 채팅 연결 함수
   const handleChat = () => {
-    if (!post?.contact_url) {
+    if (!post?.contact_url)
       return alert('판매자가 연락처 링크를 등록하지 않았습니다 😢');
-    }
     let url = post.contact_url.trim();
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = `https://${url}`;
-    }
+    if (!url.startsWith('http')) url = `https://${url}`;
     window.open(url, '_blank');
   };
 
@@ -89,45 +85,42 @@ export default function MarketDetail() {
       </div>
     );
 
+  // 🛡️ 내 글인지 확인 (내 아이디 == 글쓴이 아이디)
+  const isMyPost =
+    currentUser && post.user_id && currentUser.id === post.user_id;
+
   return (
     <div className="min-h-screen bg-white pb-24">
-      {/* 헤더 */}
       <header className="sticky top-0 bg-white/80 backdrop-blur-md border-b z-20 px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.back()}
-            className="text-2xl p-2 hover:bg-gray-100 rounded-full cursor-pointer text-black"
+            className="text-2xl p-2 hover:bg-gray-100 rounded-full text-black"
           >
             ←
           </button>
           <h1 className="font-bold text-lg text-black">상품 상세</h1>
         </div>
 
-        {/* 🗑️ 삭제 버튼 (우측 상단) */}
-        <button
-          onClick={handleDelete}
-          className="text-gray-400 hover:text-red-500 p-2 text-sm font-bold border rounded-lg hover:border-red-500 transition"
-        >
-          삭제
-        </button>
+        {/* 🚨 내 글일 때만 삭제 버튼 표시! */}
+        {isMyPost && (
+          <button
+            onClick={handleDelete}
+            className="text-red-500 p-2 text-sm font-bold border border-red-200 rounded-lg hover:bg-red-50 transition"
+          >
+            🗑️ 삭제
+          </button>
+        )}
       </header>
 
-      {/* 상품 이미지 */}
       <div className="w-full h-[40vh] bg-gray-100 flex items-center justify-center overflow-hidden">
         {post.image_url ? (
-          <img
-            src={post.image_url}
-            alt={post.title}
-            className="w-full h-full object-cover"
-          />
+          <img src={post.image_url} className="w-full h-full object-cover" />
         ) : (
-          <div className="text-gray-400 font-bold">
-            이미지가 없는 게시글입니다.
-          </div>
+          <div className="text-gray-400 font-bold">이미지 없음</div>
         )}
       </div>
 
-      {/* 상세 내용 */}
       <div className="max-w-3xl mx-auto p-5">
         <div className="flex items-center gap-3 mb-6 border-b pb-4">
           <div className="w-12 h-12 bg-gray-300 rounded-full"></div>
@@ -138,18 +131,16 @@ export default function MarketDetail() {
             </div>
           </div>
         </div>
-
         <h1 className="text-2xl font-bold text-gray-900 mb-2">{post.title}</h1>
         <div className="text-gray-800 leading-relaxed min-h-[100px] whitespace-pre-line">
           {post.content}
         </div>
       </div>
 
-      {/* 하단 고정 구매바 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 safe-area-pb z-30">
         <div className="max-w-3xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <button className="text-2xl text-gray-400 hover:text-red-500 transition cursor-pointer">
+            <button className="text-2xl text-gray-400 hover:text-red-500">
               ♥
             </button>
             <div className="border-l pl-4 h-10 flex flex-col justify-center">
@@ -161,7 +152,7 @@ export default function MarketDetail() {
           </div>
           <button
             onClick={handleChat}
-            className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition cursor-pointer"
+            className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition"
           >
             채팅으로 거래하기
           </button>

@@ -1,27 +1,44 @@
 // web/app/write/page.tsx
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 
 export default function WritePage() {
-  const [category, setCategory] = useState('market'); // 📂 카테고리 (market/community)
+  const [category, setCategory] = useState('market');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [price, setPrice] = useState('');
   const [contactLink, setContactLink] = useState('');
   const [image, setImage] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<any>(null); // 👤 로그인 유저 정보
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // 1. 들어오자마자 로그인 체크
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        alert('로그인이 필요한 서비스입니다!');
+        router.replace('/login'); // 로그인 안 했으면 쫓아냄
+      } else {
+        setUser(user);
+      }
+    };
+    checkUser();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !content) return alert('제목과 내용을 입력해주세요.');
-    // 장터글인데 가격이 없으면 경고
     if (category === 'market' && !price)
       return alert('판매 가격을 입력해주세요.');
+    if (!user) return alert('로그인 정보가 없습니다.');
 
     setIsLoading(true);
 
@@ -38,14 +55,16 @@ export default function WritePage() {
         imageUrl = data.publicUrl;
       }
 
+      // 2. 글 저장할 때 user_id(내 아이디)도 같이 저장!
       const { error } = await supabase.from('posts').insert([
         {
-          category, // 📂 카테고리 저장
+          category,
           title,
           content,
-          price: category === 'market' && price ? parseInt(price) : null, // 커뮤니티면 가격 없음
+          price: category === 'market' && price ? parseInt(price) : null,
           contact_url: contactLink,
           image_url: imageUrl,
+          user_id: user.id, // 👈 핵심! 내 ID 박제
         },
       ]);
 
@@ -60,11 +79,13 @@ export default function WritePage() {
     }
   };
 
+  if (!user) return <div className="p-10 text-center">로그인 확인 중...</div>;
+
   return (
     <div className="p-6 max-w-md mx-auto min-h-screen bg-gray-50">
       <h1 className="text-2xl font-bold mb-6 text-gray-900">글쓰기</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* 📂 게시판 선택 */}
+        {/* 게시판 선택 */}
         <div className="flex gap-2 mb-2">
           <button
             type="button"
@@ -98,7 +119,6 @@ export default function WritePage() {
           className="border p-3 rounded-lg w-full text-black bg-white"
         />
 
-        {/* 장터글일 때만 가격/연락처 입력 */}
         {category === 'market' && (
           <>
             <input
