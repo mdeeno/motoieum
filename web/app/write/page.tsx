@@ -8,9 +8,9 @@ import { useRouter } from 'next/navigation';
 export default function WritePage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [image, setImage] = useState<File | null>(null); // 선택된 이미지 파일
+  const [image, setImage] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null); // 파일 선택창 제어용
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,21 +22,23 @@ export default function WritePage() {
     try {
       let imageUrl = null;
 
-      // 1. 이미지가 선택되었다면 Supabase Storage에 업로드
       if (image) {
-        const fileName = `${Date.now()}_${image.name}`; // 파일명 중복 방지 (시간_파일명)
+        // 🚨 수정된 부분: 파일 이름을 안전한 영어/숫자로 변경
+        const fileExt = image.name.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+
         const { data, error: uploadError } = await supabase.storage
-          .from('images') // 아까 만든 버킷 이름
+          .from('images')
           .upload(fileName, image);
 
         if (uploadError) {
           console.error('이미지 업로드 실패:', uploadError);
-          alert('이미지 업로드에 실패했습니다.');
+          // 한글 파일명 문제일 수 있으니 에러 메시지를 구체적으로 띄움
+          alert(`이미지 업로드 실패: ${uploadError.message}`);
           setIsLoading(false);
           return;
         }
 
-        // 2. 업로드된 이미지의 공개 주소(URL) 가져오기
         const { data: urlData } = supabase.storage
           .from('images')
           .getPublicUrl(fileName);
@@ -44,7 +46,6 @@ export default function WritePage() {
         imageUrl = urlData.publicUrl;
       }
 
-      // 3. 글 데이터 + 이미지 주소를 DB에 저장
       const { error } = await supabase
         .from('posts')
         .insert([{ title, content, image_url: imageUrl }]);
@@ -70,7 +71,6 @@ export default function WritePage() {
         중고 거래 글쓰기
       </h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* 제목 */}
         <input
           type="text"
           placeholder="제목 (예: 혼다 슈퍼커브 팝니다)"
@@ -78,16 +78,12 @@ export default function WritePage() {
           onChange={(e) => setTitle(e.target.value)}
           className="border p-3 rounded-lg w-full text-black bg-white"
         />
-
-        {/* 내용 */}
         <textarea
           placeholder="내용 (가격, 연식, 상태 등을 적어주세요)"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           className="border p-3 rounded-lg w-full h-40 text-black resize-none bg-white"
         />
-
-        {/* 📸 사진 업로드 버튼 */}
         <div className="flex flex-col gap-2">
           <input
             type="file"
@@ -97,7 +93,7 @@ export default function WritePage() {
                 setImage(e.target.files[0]);
               }
             }}
-            className="hidden" // 못생긴 기본 파일창 숨기기
+            className="hidden"
             ref={fileInputRef}
           />
           <button
@@ -108,8 +104,6 @@ export default function WritePage() {
             {image ? `📸 ${image.name} 선택됨` : '+ 사진 추가하기'}
           </button>
         </div>
-
-        {/* 저장 버튼 */}
         <button
           type="submit"
           disabled={isLoading}
