@@ -1,4 +1,3 @@
-// web/app/market/[id]/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -10,7 +9,8 @@ type Post = {
   title: string;
   content: string;
   created_at: string;
-  image_url: string | null; // 📸 이미지 주소 타입 추가
+  image_url: string | null;
+  price: number | null; // 💰 가격 타입
 };
 
 export default function MarketDetail() {
@@ -30,7 +30,7 @@ export default function MarketDetail() {
         .eq('id', id)
         .single();
 
-      if (error) console.error('글 가져오기 실패:', error);
+      if (error) console.error(error);
       else setPost(data);
       setLoading(false);
     };
@@ -39,10 +39,14 @@ export default function MarketDetail() {
   }, [id]);
 
   if (loading)
-    return <div className="text-center py-20 text-gray-500">로딩 중...</div>;
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center text-gray-500">
+        로딩 중...
+      </div>
+    );
   if (!post)
     return (
-      <div className="text-center py-20 text-gray-500">
+      <div className="min-h-screen bg-white flex items-center justify-center text-gray-500">
         글을 찾을 수 없습니다.
       </div>
     );
@@ -60,13 +64,13 @@ export default function MarketDetail() {
         <h1 className="font-bold text-lg text-black">상품 상세</h1>
       </header>
 
-      {/* 📸 상품 이미지 (수정된 부분) */}
+      {/* 상품 이미지 */}
       <div className="w-full h-[40vh] bg-gray-100 flex items-center justify-center overflow-hidden">
         {post.image_url ? (
           <img
             src={post.image_url}
             alt={post.title}
-            className="w-full h-full object-cover" // 꽉 채우기
+            className="w-full h-full object-cover"
           />
         ) : (
           <div className="text-gray-400 font-bold">
@@ -93,14 +97,23 @@ export default function MarketDetail() {
         </div>
       </div>
 
-      {/* 하단 고정 바 */}
+      {/* 🟢 하단 고정 구매바 (가격 표시) */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 safe-area-pb z-30">
         <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <span className="text-xl font-extrabold text-gray-900 ml-4">
-            가격 미정
-          </span>
-          <button className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition">
-            채팅하기
+          <div className="flex items-center gap-4">
+            <button className="text-2xl text-gray-400 hover:text-red-500 transition cursor-pointer">
+              ♥
+            </button>
+            <div className="border-l pl-4 h-10 flex flex-col justify-center">
+              <span className="text-xs text-gray-500 font-bold">가격</span>
+              {/* 💰 가격 표시 (천단위 콤마) */}
+              <span className="text-xl font-extrabold text-gray-900">
+                {post.price ? `${post.price.toLocaleString()}원` : '가격 제안'}
+              </span>
+            </div>
+          </div>
+          <button className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition cursor-pointer">
+            채팅으로 거래하기
           </button>
         </div>
       </div>
