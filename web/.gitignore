@@ -18,3 +18,4 @@ build
 .env.*.local
 web/.env
 web/.env.local
+.vercel

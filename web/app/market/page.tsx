@@ -47,9 +47,12 @@ export default function MarketPage() {
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    alert('로그아웃 되었습니다.');
-    window.location.reload();
+    if (confirm('로그아웃 하시겠습니까?')) {
+      await supabase.auth.signOut();
+      setUser(null);
+      // 로그아웃 후 페이지 리프레시 (선택사항)
+      window.location.reload();
+    }
   };
 
   return (
@@ -91,7 +94,6 @@ export default function MarketPage() {
                 <input
                   type="text"
                   placeholder="제목 검색..."
-                  // [수정] text-gray-900 추가하여 글자색 검정으로 고정
                   className="bg-transparent border-none focus:outline-none text-sm w-32 md:w-48 text-gray-900 placeholder-gray-400"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -116,14 +118,22 @@ export default function MarketPage() {
               </button>
             )}
 
-            {/* 로그인/로그아웃 버튼 */}
+            {/* ✅ [수정됨] 로그인 상태에 따른 버튼 (내정보 / 로그아웃) */}
             {user ? (
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 text-gray-600 text-xs md:text-sm font-bold hover:bg-gray-100 rounded-lg whitespace-nowrap"
-              >
-                로그아웃
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => router.push('/my')}
+                  className="px-3 py-1.5 text-blue-600 text-xs md:text-sm font-bold hover:bg-blue-50 rounded-lg whitespace-nowrap transition"
+                >
+                  내 정보
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-1.5 text-gray-400 text-xs md:text-sm hover:bg-gray-100 rounded-lg whitespace-nowrap transition"
+                >
+                  로그아웃
+                </button>
+              </div>
             ) : (
               <button
                 onClick={() => router.push('/login')}
@@ -167,13 +177,12 @@ export default function MarketPage() {
           isActive={activeTab === 'map'}
           onClick={() => setActiveTab('map')}
         />
+        {/* ✅ [수정됨] 내정보 버튼 클릭 시 /my 페이지로 이동 */}
         <MobileTabButton
           label={user ? '내정보' : '로그인'}
           icon="👤"
           isActive={false}
-          onClick={() =>
-            user ? alert('내 정보 페이지 준비중') : router.push('/login')
-          }
+          onClick={() => (user ? router.push('/my') : router.push('/login'))}
         />
       </nav>
 
