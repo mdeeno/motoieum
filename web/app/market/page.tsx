@@ -1,4 +1,3 @@
-// web/app/market/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -351,39 +350,41 @@ function PostListView({
 }
 
 // --------------------------------------------------------
-// 📋 하위 컴포넌트: 네이버 지도 (새로 교체된 코드)
+// 📋 하위 컴포넌트: 카카오 지도 (완전 교체됨)
 // --------------------------------------------------------
 function ShopListView() {
   useEffect(() => {
-    const initMap = () => {
-      // @ts-ignore (네이버 지도 타입 무시)
-      if (typeof naver === 'undefined' || !naver.maps) return;
-
-      // 1. 지도 옵션 설정 (서울 시청 중심)
-      const mapOptions = {
-        // @ts-ignore
-        center: new naver.maps.LatLng(37.5665, 126.978),
-        zoom: 14,
-      };
-
-      // 2. 지도 그리기 ('map' ID를 가진 태그에)
+    const loadKakaoMap = () => {
       // @ts-ignore
-      const map = new naver.maps.Map('map', mapOptions);
+      if (typeof kakao === 'undefined' || !kakao.maps) return;
 
-      // 3. 마커 찍기 (예시: 성수동)
       // @ts-ignore
-      new naver.maps.Marker({
+      kakao.maps.load(() => {
+        const container = document.getElementById('map');
+        const options = {
+          // @ts-ignore
+          center: new kakao.maps.LatLng(37.5665, 126.978), // 초기 좌표 (서울 시청)
+          level: 3, // 확대 레벨
+        };
         // @ts-ignore
-        position: new naver.maps.LatLng(37.545, 127.055),
-        map: map,
+        const map = new kakao.maps.Map(container, options);
+
+        // 마커 추가 예시 (성수동)
+        // @ts-ignore
+        const markerPosition = new kakao.maps.LatLng(37.545, 127.055);
+        // @ts-ignore
+        const marker = new kakao.maps.Marker({
+          position: markerPosition,
+        });
+        marker.setMap(map);
       });
     };
 
-    // 네이버 지도 스크립트가 로드될 때까지 기다렸다가 실행
+    // 카카오 스크립트가 로드될 때까지 0.1초마다 확인
     const timer = setInterval(() => {
       // @ts-ignore
-      if (typeof naver !== 'undefined') {
-        initMap();
+      if (typeof kakao !== 'undefined') {
+        loadKakaoMap();
         clearInterval(timer);
       }
     }, 100);
@@ -399,7 +400,7 @@ function ShopListView() {
       ></div>
 
       <div className="absolute bottom-4 left-4 right-4 bg-white p-4 rounded-xl shadow-lg z-10 opacity-95">
-        <h3 className="font-bold text-gray-800">🛵 내 주변 정비소</h3>
+        <h3 className="font-bold text-gray-800">🛵 내 주변 정비소 (Kakao)</h3>
         <p className="text-xs text-gray-500">지도를 움직여서 찾아보세요.</p>
       </div>
     </div>

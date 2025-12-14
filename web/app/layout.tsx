@@ -1,5 +1,5 @@
 import './globals.css';
-import Script from 'next/script'; // ✅ Script 컴포넌트 필수
+import Script from 'next/script';
 
 export const metadata = {
   title: 'MOTOIEUM',
@@ -14,9 +14,11 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
+        {/* ✅ 카카오맵 스크립트 추가 (autoload=false 필수) */}
+        {/* 👇 아래 YOUR_KAKAO_KEY 부분을 복사한 키로 바꾸세요! */}
         <Script
           strategy="beforeInteractive"
-          src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=7n4ywi632h"
+          src="//dapi.kakao.com/v2/maps/sdk.js?appkey=c223f6110e84b8965b50e4ecfd7fc3b3&autoload=false"
         />
       </head>
       <body>{children}</body>
