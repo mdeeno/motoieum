@@ -50,7 +50,6 @@ export default function MarketPage() {
     if (confirm('로그아웃 하시겠습니까?')) {
       await supabase.auth.signOut();
       setUser(null);
-      // 로그아웃 후 페이지 리프레시 (선택사항)
       window.location.reload();
     }
   };
@@ -118,7 +117,7 @@ export default function MarketPage() {
               </button>
             )}
 
-            {/* ✅ [수정됨] 로그인 상태에 따른 버튼 (내정보 / 로그아웃) */}
+            {/* ✅ 로그인 상태에 따른 버튼 (내정보 / 로그아웃) */}
             {user ? (
               <div className="flex items-center gap-2">
                 <button
@@ -177,7 +176,6 @@ export default function MarketPage() {
           isActive={activeTab === 'map'}
           onClick={() => setActiveTab('map')}
         />
-        {/* ✅ [수정됨] 내정보 버튼 클릭 시 /my 페이지로 이동 */}
         <MobileTabButton
           label={user ? '내정보' : '로그인'}
           icon="👤"
@@ -353,71 +351,57 @@ function PostListView({
 }
 
 // --------------------------------------------------------
-// 📋 하위 컴포넌트: 정비소 리스트 (더미 데이터)
+// 📋 하위 컴포넌트: 네이버 지도 (새로 교체된 코드)
 // --------------------------------------------------------
 function ShopListView() {
-  const SHOPS = [
-    {
-      id: 1,
-      name: '성수 혼다 강남점',
-      loc: '서울 성동구',
-      phone: '02-123-4567',
-      tag: '공식',
-    },
-    {
-      id: 2,
-      name: '모토이음 정비센터',
-      loc: '서울 마포구',
-      phone: '010-0000-0000',
-      tag: '제휴',
-    },
-    {
-      id: 3,
-      name: '야마하 관악점',
-      loc: '서울 관악구',
-      phone: '02-987-6543',
-      tag: '공식',
-    },
-    {
-      id: 4,
-      name: '베스파 용산점',
-      loc: '서울 용산구',
-      phone: '02-555-5555',
-      tag: '전문',
-    },
-  ];
+  useEffect(() => {
+    const initMap = () => {
+      // @ts-ignore (네이버 지도 타입 무시)
+      if (typeof naver === 'undefined' || !naver.maps) return;
+
+      // 1. 지도 옵션 설정 (서울 시청 중심)
+      const mapOptions = {
+        // @ts-ignore
+        center: new naver.maps.LatLng(37.5665, 126.978),
+        zoom: 14,
+      };
+
+      // 2. 지도 그리기 ('map' ID를 가진 태그에)
+      // @ts-ignore
+      const map = new naver.maps.Map('map', mapOptions);
+
+      // 3. 마커 찍기 (예시: 성수동)
+      // @ts-ignore
+      new naver.maps.Marker({
+        // @ts-ignore
+        position: new naver.maps.LatLng(37.545, 127.055),
+        map: map,
+      });
+    };
+
+    // 네이버 지도 스크립트가 로드될 때까지 기다렸다가 실행
+    const timer = setInterval(() => {
+      // @ts-ignore
+      if (typeof naver !== 'undefined') {
+        initMap();
+        clearInterval(timer);
+      }
+    }, 100);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-extrabold text-gray-800 px-2">
-        📍 내 주변 추천 정비소
-      </h2>
-      {SHOPS.map((shop) => (
-        <div
-          key={shop.id}
-          className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center hover:shadow-md transition"
-        >
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-bold text-white ${
-                  shop.tag === '공식' ? 'bg-red-500' : 'bg-blue-500'
-                }`}
-              >
-                {shop.tag}
-              </span>
-              <h3 className="font-bold text-gray-900">{shop.name}</h3>
-            </div>
-            <p className="text-gray-500 text-sm">📍 {shop.loc}</p>
-          </div>
-          <button
-            onClick={() => window.open(`tel:${shop.phone}`)}
-            className="bg-gray-100 w-10 h-10 rounded-full flex items-center justify-center text-xl hover:bg-green-100 transition"
-          >
-            📞
-          </button>
-        </div>
-      ))}
+    <div className="h-[calc(100vh-200px)] w-full relative">
+      {/* 지도가 그려질 영역 */}
+      <div
+        id="map"
+        className="w-full h-full rounded-xl overflow-hidden shadow-inner bg-gray-100"
+      ></div>
+
+      <div className="absolute bottom-4 left-4 right-4 bg-white p-4 rounded-xl shadow-lg z-10 opacity-95">
+        <h3 className="font-bold text-gray-800">🛵 내 주변 정비소</h3>
+        <p className="text-xs text-gray-500">지도를 움직여서 찾아보세요.</p>
+      </div>
     </div>
   );
 }
