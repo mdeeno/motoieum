@@ -97,7 +97,7 @@ export default function Home() {
           <div className="space-y-6">
             <div className="flex justify-between items-center px-2">
               <h2 className="text-xl font-extrabold text-gray-800">
-                🔥 최신 매물
+                🔥 실시간 인기 매물
               </h2>
             </div>
 
