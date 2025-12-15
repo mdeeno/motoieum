@@ -164,7 +164,10 @@ export default function Home() {
             <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full cursor-pointer">
               🔍
             </button>
-            <button className="hidden md:block px-5 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-800 transition cursor-pointer">
+            <button
+              onClick={() => router.push('/login')}
+              className="hidden md:block px-5 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-800 transition cursor-pointer"
+            >
               로그인
             </button>
           </div>
@@ -202,7 +205,7 @@ export default function Home() {
           label="마이"
           icon="👤"
           isActive={false}
-          onClick={() => alert('로그인 페이지로 이동')}
+          onClick={() => router.push('/login')}
         />
       </nav>
 
