@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link'; // ✅ Link 컴포넌트 추가 (필수!)
 import { supabase } from '../../lib/supabase';
 
 // 데이터 타입 정의
@@ -116,15 +117,15 @@ export default function MarketPage() {
               </button>
             )}
 
-            {/* ✅ 로그인 상태에 따른 버튼 (내정보 / 로그아웃) */}
+            {/* ✅ 로그인 상태에 따른 버튼 (Link 태그 적용됨) */}
             {user ? (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => router.push('/my')}
-                  className="px-3 py-1.5 text-blue-600 text-xs md:text-sm font-bold hover:bg-blue-50 rounded-lg whitespace-nowrap transition"
+                <Link
+                  href="/my"
+                  className="px-3 py-1.5 text-blue-600 text-xs md:text-sm font-bold hover:bg-blue-50 rounded-lg whitespace-nowrap transition flex items-center"
                 >
                   내 정보
-                </button>
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="px-3 py-1.5 text-gray-400 text-xs md:text-sm hover:bg-gray-100 rounded-lg whitespace-nowrap transition"
@@ -133,12 +134,12 @@ export default function MarketPage() {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => router.push('/login')}
-                className="px-4 py-1.5 bg-gray-900 text-white rounded-full text-xs md:text-sm font-bold hover:bg-gray-800 transition whitespace-nowrap"
+              <Link
+                href="/login"
+                className="px-4 py-1.5 bg-gray-900 text-white rounded-full text-xs md:text-sm font-bold hover:bg-gray-800 transition whitespace-nowrap flex items-center justify-center"
               >
                 로그인
-              </button>
+              </Link>
             )}
           </div>
         </div>
@@ -175,12 +176,24 @@ export default function MarketPage() {
           isActive={activeTab === 'map'}
           onClick={() => setActiveTab('map')}
         />
-        <MobileTabButton
-          label={user ? '내정보' : '로그인'}
-          icon="👤"
-          isActive={false}
-          onClick={() => (user ? router.push('/my') : router.push('/login'))}
-        />
+        {/* 모바일 하단 탭 내정보/로그인 버튼 */}
+        {user ? (
+          <Link
+            href="/my"
+            className="flex flex-col items-center justify-center w-full h-full cursor-pointer active:scale-95 transition-all"
+          >
+            <span className="text-2xl opacity-50 grayscale">👤</span>
+            <span className="text-xs font-bold text-gray-400">내정보</span>
+          </Link>
+        ) : (
+          <Link
+            href="/login"
+            className="flex flex-col items-center justify-center w-full h-full cursor-pointer active:scale-95 transition-all"
+          >
+            <span className="text-2xl opacity-50 grayscale">👤</span>
+            <span className="text-xs font-bold text-gray-400">로그인</span>
+          </Link>
+        )}
       </nav>
 
       {/* 🔵 글쓰기 플로팅 버튼 (지도 탭 아닐 때만 보임) */}
@@ -220,7 +233,6 @@ function PostListView({
 
       // 카테고리 필터링
       if (category === 'market') {
-        // null이거나 market인 것
         query = query.or(`category.eq.market,category.is.null`);
       } else {
         query = query.eq('category', 'community');
@@ -278,7 +290,6 @@ function PostListView({
                   : 'p-5 flex items-center justify-between'
               }`}
             >
-              {/* === 장터 카드 디자인 === */}
               {category === 'market' ? (
                 <>
                   <div className="w-32 sm:w-full sm:h-52 bg-gray-100 relative overflow-hidden shrink-0">
@@ -300,7 +311,6 @@ function PostListView({
                         {item.title}
                       </h3>
                       <div className="text-gray-400 text-xs mb-2 line-clamp-1">
-                        {/* 내용 미리보기 (지역 정보가 있다면 여기에 표시) */}
                         {new Date(item.created_at).toLocaleDateString()}
                       </div>
                     </div>
@@ -312,7 +322,6 @@ function PostListView({
                   </div>
                 </>
               ) : (
-                /* === 커뮤니티 카드 디자인 === */
                 <>
                   <div className="flex-1 min-w-0 pr-4">
                     <div className="flex items-center gap-2 mb-1">
@@ -350,7 +359,7 @@ function PostListView({
 }
 
 // --------------------------------------------------------
-// 📋 하위 컴포넌트: 카카오 지도 (완전 교체됨)
+// 📋 하위 컴포넌트: 카카오 지도 (작동 확인됨)
 // --------------------------------------------------------
 function ShopListView() {
   useEffect(() => {
@@ -363,13 +372,13 @@ function ShopListView() {
         const container = document.getElementById('map');
         const options = {
           // @ts-ignore
-          center: new kakao.maps.LatLng(37.5665, 126.978), // 초기 좌표 (서울 시청)
-          level: 3, // 확대 레벨
+          center: new kakao.maps.LatLng(37.5665, 126.978),
+          level: 3,
         };
         // @ts-ignore
         const map = new kakao.maps.Map(container, options);
 
-        // 마커 추가 예시 (성수동)
+        // 예시 마커
         // @ts-ignore
         const markerPosition = new kakao.maps.LatLng(37.545, 127.055);
         // @ts-ignore
@@ -380,7 +389,6 @@ function ShopListView() {
       });
     };
 
-    // 카카오 스크립트가 로드될 때까지 0.1초마다 확인
     const timer = setInterval(() => {
       // @ts-ignore
       if (typeof kakao !== 'undefined') {
@@ -393,12 +401,10 @@ function ShopListView() {
 
   return (
     <div className="h-[calc(100vh-200px)] w-full relative">
-      {/* 지도가 그려질 영역 */}
       <div
         id="map"
         className="w-full h-full rounded-xl overflow-hidden shadow-inner bg-gray-100"
       ></div>
-
       <div className="absolute bottom-4 left-4 right-4 bg-white p-4 rounded-xl shadow-lg z-10 opacity-95">
         <h3 className="font-bold text-gray-800">🛵 내 주변 정비소 (Kakao)</h3>
         <p className="text-xs text-gray-500">지도를 움직여서 찾아보세요.</p>
