@@ -4,14 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
-// ---------------------------------------------------------
-// [설정] Supabase 클라이언트 즉시 생성 (환경변수 사용)
-// ---------------------------------------------------------
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Supabase 설정
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-// 타입 정의 (TS 오류 방지)
 declare global {
   interface Window {
     kakao: any;
@@ -23,12 +21,10 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'market' | 'community' | 'map'>(
     'market'
   );
-
-  // 🟢 데이터 상태 관리 (가짜 데이터 대신 사용)
   const [marketItems, setMarketItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 1. 화면이 켜지면 DB에서 데이터 가져오기
+  // 화면이 켜지면 DB에서 데이터 가져오기
   useEffect(() => {
     const fetchMarketItems = async () => {
       setLoading(true);
@@ -38,7 +34,7 @@ export default function Home() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('데이터 가져오기 실패:', error);
+        console.error('데이터 에러:', error);
       } else {
         setMarketItems(data || []);
       }
@@ -55,7 +51,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
           <div className="flex items-center gap-10">
             <h1
-              className="text-2xl font-black italic tracking-wide text-blue-600 cursor-pointer"
+              className="text-2xl font-black italic text-blue-600 cursor-pointer"
               onClick={() => setActiveTab('market')}
             >
               MOTOIEUM
@@ -87,7 +83,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => router.push('/login')}
-              className="px-5 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-800 transition cursor-pointer"
+              className="hidden md:block px-5 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-800 transition"
             >
               로그인
             </button>
@@ -99,40 +95,48 @@ export default function Home() {
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 pb-28 md:pb-8">
         {activeTab === 'market' && (
           <div className="space-y-6">
-            <h2 className="text-xl font-extrabold text-gray-800 px-2">
-              🔥 최신 매물 (DB 연동됨)
-            </h2>
+            <div className="flex justify-between items-center px-2">
+              <h2 className="text-xl font-extrabold text-gray-800">
+                🔥 최신 매물
+              </h2>
+            </div>
 
             {loading ? (
               <div className="text-center py-20 text-gray-400">
-                데이터 로딩 중...
+                데이터를 불러오는 중입니다...
               </div>
             ) : marketItems.length === 0 ? (
-              <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-xl">
-                등록된 매물이 없습니다. <br /> 첫 번째 매물을 등록해보세요!
+              <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-xl bg-gray-50">
+                <p className="mb-2">등록된 매물이 없습니다 텅~</p>
+                <p className="text-sm">
+                  우측 하단 + 버튼을 눌러 첫 매물을 등록해보세요!
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {marketItems.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition p-4 cursor-pointer"
+                    onClick={() => router.push(`/market/${item.id}`)}
+                    className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition p-4 cursor-pointer overflow-hidden"
                   >
-                    <div className="h-40 bg-gray-100 rounded-xl mb-4 flex items-center justify-center text-gray-400 overflow-hidden">
+                    <div className="h-40 bg-gray-100 rounded-xl mb-4 flex items-center justify-center overflow-hidden text-gray-400 relative">
                       {item.image_url ? (
                         <img
                           src={item.image_url}
-                          alt="매물"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                         />
                       ) : (
-                        <div className="flex flex-col items-center gap-2">
-                          <span>📷</span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-2xl">🏍️</span>
                           <span className="text-xs">이미지 없음</span>
                         </div>
                       )}
+                      <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded-lg text-[10px] font-bold text-gray-600 shadow-sm">
+                        {item.status}
+                      </div>
                     </div>
-                    <h3 className="font-bold text-gray-900 text-lg mb-1">
+                    <h3 className="font-bold text-gray-900 text-lg mb-1 truncate">
                       {item.title}
                     </h3>
                     <div className="text-gray-500 text-sm mb-2">
@@ -141,9 +145,6 @@ export default function Home() {
                     <div className="font-extrabold text-xl text-blue-600">
                       {item.price}
                     </div>
-                    <span className="inline-block mt-2 bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-bold">
-                      {item.status}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -152,17 +153,27 @@ export default function Home() {
         )}
 
         {activeTab === 'community' && (
-          <div className="text-center py-20 text-gray-400">
-            커뮤니티 준비 중...
+          <div className="flex flex-col items-center justify-center h-[50vh] text-gray-400">
+            <span className="text-4xl mb-4">💬</span>
+            <p>커뮤니티 기능은 준비 중입니다.</p>
           </div>
         )}
 
-        {/* ✅ 진짜 카카오맵 컴포넌트 */}
         {activeTab === 'map' && <KakaoMap />}
       </main>
 
-      {/* 모바일 탭바 */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-20 safe-area-pb z-40 rounded-t-2xl shadow-lg">
+      {/* 글쓰기 플로팅 버튼 (장터 탭에서만 보임) */}
+      {activeTab === 'market' && (
+        <button
+          onClick={() => router.push('/write')}
+          className="fixed bottom-24 right-5 md:bottom-12 md:right-12 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl text-3xl flex items-center justify-center hover:bg-blue-500 active:scale-90 transition z-50 cursor-pointer"
+        >
+          +
+        </button>
+      )}
+
+      {/* 모바일 하단 탭바 */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-20 safe-area-pb z-40 rounded-t-2xl shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
         <MobileTabButton
           label="장터"
           icon="🏷️"
@@ -188,37 +199,23 @@ export default function Home() {
           onClick={() => router.push('/login')}
         />
       </nav>
-
-      {/* 글쓰기 버튼 */}
-      {activeTab === 'market' && (
-        <button
-          onClick={() => router.push('/write')}
-          className="fixed bottom-24 right-5 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl text-3xl flex items-center justify-center hover:bg-blue-500 z-50 cursor-pointer"
-        >
-          <span className="-mt-1">+</span>
-        </button>
-      )}
     </div>
   );
 }
 
-// ------------------------------------------
-// ✅ 카카오맵 컴포넌트 (실제 지도 표시)
-// ------------------------------------------
+// --- 하위 컴포넌트들 ---
+
 function KakaoMap() {
   useEffect(() => {
-    // 1. 지도를 담을 영역 찾기
     const container = document.getElementById('map');
-
-    // 2. 카카오 스크립트가 로드되었는지 확인 후 지도 생성
     if (window.kakao && window.kakao.maps) {
       const options = {
-        center: new window.kakao.maps.LatLng(37.566826, 126.9786567), // 서울시청 중심
-        level: 3, // 확대 레벨
+        center: new window.kakao.maps.LatLng(37.566826, 126.9786567),
+        level: 3,
       };
       const map = new window.kakao.maps.Map(container, options);
 
-      // 마커 하나 찍어보기 (서울시청)
+      // 마커 추가
       const markerPosition = new window.kakao.maps.LatLng(
         37.566826,
         126.9786567
@@ -227,7 +224,6 @@ function KakaoMap() {
       marker.setMap(map);
     }
   }, []);
-
   return (
     <div className="w-full h-[60vh] rounded-3xl overflow-hidden border border-gray-200 shadow-inner bg-gray-100 relative">
       <div id="map" className="w-full h-full"></div>
@@ -238,7 +234,6 @@ function KakaoMap() {
   );
 }
 
-// 기타 버튼 컴포넌트들
 function HeaderTab({ label, isActive, onClick }: any) {
   return (
     <button
@@ -256,10 +251,10 @@ function MobileTabButton({ label, icon, isActive, onClick }: any) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center justify-center w-full h-full"
+      className="flex flex-col items-center justify-center w-full h-full cursor-pointer"
     >
       <span
-        className={`text-2xl ${
+        className={`text-2xl transition-all ${
           isActive ? '-translate-y-1' : 'opacity-50 grayscale'
         }`}
       >
