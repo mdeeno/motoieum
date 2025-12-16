@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase 설정
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -24,7 +23,6 @@ export default function Home() {
   const [marketItems, setMarketItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 화면이 켜지면 DB에서 데이터 가져오기
   useEffect(() => {
     const fetchMarketItems = async () => {
       setLoading(true);
@@ -32,21 +30,25 @@ export default function Home() {
         .from('market')
         .select('*')
         .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('데이터 에러:', error);
-      } else {
-        setMarketItems(data || []);
-      }
+      if (!error) setMarketItems(data || []);
       setLoading(false);
     };
-
     fetchMarketItems();
   }, []);
 
+  const handleItemClick = (item: any) => {
+    if (
+      (item.source === 'junggeomdan' || item.source === 'batumae') &&
+      item.external_link
+    ) {
+      window.open(item.external_link, '_blank');
+    } else {
+      router.push(`/market/${item.id}`);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 font-sans">
-      {/* 헤더 */}
       <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
           <div className="flex items-center gap-10">
@@ -75,12 +77,6 @@ export default function Home() {
             </nav>
           </div>
           <div className="flex gap-2">
-            <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full cursor-pointer">
-              🔔
-            </button>
-            <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full cursor-pointer">
-              🔍
-            </button>
             <button
               onClick={() => router.push('/login')}
               className="hidden md:block px-5 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-800 transition"
@@ -91,34 +87,26 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 메인 컨텐츠 */}
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 pb-28 md:pb-8">
         {activeTab === 'market' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center px-2">
-              <h2 className="text-xl font-extrabold text-gray-800">
-                🔥 실시간 인기 매물
-              </h2>
-            </div>
+            <h2 className="text-xl font-extrabold text-gray-800 px-2">
+              🔥 실시간 인기 매물
+            </h2>
 
             {loading ? (
-              <div className="text-center py-20 text-gray-400">
-                데이터를 불러오는 중입니다...
-              </div>
+              <div className="text-center py-20 text-gray-400">로딩 중...</div>
             ) : marketItems.length === 0 ? (
               <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-xl bg-gray-50">
-                <p className="mb-2">등록된 매물이 없습니다 텅~</p>
-                <p className="text-sm">
-                  우측 하단 + 버튼을 눌러 첫 매물을 등록해보세요!
-                </p>
+                매물이 없습니다.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {marketItems.map((item) => (
                   <div
                     key={item.id}
-                    onClick={() => router.push(`/market/${item.id}`)}
-                    className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition p-4 cursor-pointer overflow-hidden"
+                    onClick={() => handleItemClick(item)}
+                    className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition p-4 cursor-pointer overflow-hidden relative"
                   >
                     <div className="h-40 bg-gray-100 rounded-xl mb-4 flex items-center justify-center overflow-hidden text-gray-400 relative">
                       {item.image_url ? (
@@ -132,16 +120,44 @@ export default function Home() {
                           <span className="text-xs">이미지 없음</span>
                         </div>
                       )}
-                      <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded-lg text-[10px] font-bold text-gray-600 shadow-sm">
-                        {item.status}
+                      <div className="absolute top-2 left-2 flex gap-1">
+                        {item.source === 'junggeomdan' ? (
+                          <span className="bg-green-500 text-white px-2 py-1 rounded-lg text-[10px] font-bold shadow-sm">
+                            ✅ 중검단
+                          </span>
+                        ) : item.source === 'batumae' ? (
+                          <span className="bg-gray-800 text-white px-2 py-1 rounded-lg text-[10px] font-bold shadow-sm">
+                            🏍️ 바튜매
+                          </span>
+                        ) : (
+                          <span className="bg-blue-600 text-white px-2 py-1 rounded-lg text-[10px] font-bold shadow-sm">
+                            ⚡ MOTOIEUM
+                          </span>
+                        )}
                       </div>
                     </div>
+
                     <h3 className="font-bold text-gray-900 text-lg mb-1 truncate">
                       {item.title}
                     </h3>
-                    <div className="text-gray-500 text-sm mb-2">
-                      {item.location}
+
+                    {/* 🟢 연식 & 주행거리 표시 */}
+                    <div className="flex gap-2 text-xs text-gray-500 mb-2 font-medium">
+                      {item.year && (
+                        <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
+                          {item.year}
+                        </span>
+                      )}
+                      {item.mileage && (
+                        <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
+                          {item.mileage}
+                        </span>
+                      )}
+                      {!item.year && !item.mileage && (
+                        <span>{item.location}</span>
+                      )}
                     </div>
+
                     <div className="font-extrabold text-xl text-blue-600">
                       {item.price}
                     </div>
@@ -154,15 +170,12 @@ export default function Home() {
 
         {activeTab === 'community' && (
           <div className="flex flex-col items-center justify-center h-[50vh] text-gray-400">
-            <span className="text-4xl mb-4">💬</span>
-            <p>커뮤니티 기능은 준비 중입니다.</p>
+            커뮤니티 준비 중...
           </div>
         )}
-
         {activeTab === 'map' && <KakaoMap />}
       </main>
 
-      {/* 글쓰기 플로팅 버튼 (장터 탭에서만 보임) */}
       {activeTab === 'market' && (
         <button
           onClick={() => router.push('/write')}
@@ -172,7 +185,6 @@ export default function Home() {
         </button>
       )}
 
-      {/* 모바일 하단 탭바 */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-20 safe-area-pb z-40 rounded-t-2xl shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
         <MobileTabButton
           label="장터"
@@ -203,8 +215,6 @@ export default function Home() {
   );
 }
 
-// --- 하위 컴포넌트들 ---
-
 function KakaoMap() {
   useEffect(() => {
     const container = document.getElementById('map');
@@ -214,23 +224,13 @@ function KakaoMap() {
         level: 3,
       };
       const map = new window.kakao.maps.Map(container, options);
-
-      // 마커 추가
-      const markerPosition = new window.kakao.maps.LatLng(
-        37.566826,
-        126.9786567
-      );
-      const marker = new window.kakao.maps.Marker({ position: markerPosition });
-      marker.setMap(map);
+      new window.kakao.maps.Marker({
+        position: new window.kakao.maps.LatLng(37.566826, 126.9786567),
+      }).setMap(map);
     }
   }, []);
   return (
-    <div className="w-full h-[60vh] rounded-3xl overflow-hidden border border-gray-200 shadow-inner bg-gray-100 relative">
-      <div id="map" className="w-full h-full"></div>
-      <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md text-xs font-bold text-gray-600">
-        📍 내 주변 정비소
-      </div>
-    </div>
+    <div id="map" className="w-full h-[60vh] rounded-3xl bg-gray-100"></div>
   );
 }
 

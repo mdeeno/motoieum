@@ -12,84 +12,95 @@ const supabase = createClient(
 export default function WritePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'market' | 'community'>('market');
+  const [communityCategory, setCommunityCategory] = useState('자유');
 
-  // 입력값 상태
+  // 공통
   const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // 장터 전용
   const [price, setPrice] = useState('');
   const [location, setLocation] = useState('');
-  const [content, setContent] = useState(''); // 상세 내용
-  const [imageFile, setImageFile] = useState<File | null>(null); // 업로드할 파일
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null); // 미리보기 URL
+  const [year, setYear] = useState(''); // 🟢 연식
+  const [mileage, setMileage] = useState(''); // 🟢 주행거리
 
-  // 1. 로그인 체크
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const checkUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
-        alert('로그인이 필요합니다!');
+        alert('글을 작성하려면 로그인이 필요합니다!');
         router.replace('/login');
       }
-    });
+    };
+    checkUser();
   }, []);
 
-  // 2. 이미지 선택 시 미리보기 처리
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
+      setPreviewUrl(URL.createObjectURL(file));
     }
   };
 
-  // 3. 등록하기 (이미지 업로드 -> DB 저장)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !price || !location || !content) {
-      alert('내용을 모두 입력해주세요!');
-      return;
-    }
-
     setLoading(true);
 
-    let publicUrl = null;
-
     try {
-      // 3-1. 이미지가 있다면 Supabase Storage에 업로드
-      if (imageFile) {
-        const fileName = `${Date.now()}_${imageFile.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from('images') // 아까 만든 버킷 이름
-          .upload(fileName, imageFile);
-
-        if (uploadError) throw uploadError;
-
-        // 이미지 주소 가져오기
-        const { data: urlData } = supabase.storage
-          .from('images')
-          .getPublicUrl(fileName);
-
-        publicUrl = urlData.publicUrl;
+      if (activeTab === 'market') {
+        if (!title || !price || !location || !content || !year || !mileage)
+          throw new Error('내용을 모두 입력해주세요.');
+      } else {
+        if (!title || !content) throw new Error('제목과 내용을 입력해주세요.');
       }
 
-      // 3-2. DB에 게시글 저장
-      const { error: dbError } = await supabase.from('market').insert([
-        {
-          title,
-          price,
-          location,
-          content, // 상세 내용 저장
-          image_url: publicUrl, // 업로드된 이미지 주소 저장
-          status: '판매중',
-        },
-      ]);
+      let publicUrl = null;
+      if (imageFile) {
+        const fileName = `${Date.now()}_${activeTab}_${imageFile.name}`;
+        const { error } = await supabase.storage
+          .from('images')
+          .upload(fileName, imageFile);
+        if (error) throw error;
+        const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+        publicUrl = data.publicUrl;
+      }
 
-      if (dbError) throw dbError;
+      if (activeTab === 'market') {
+        const { error } = await supabase.from('market').insert([
+          {
+            title,
+            price,
+            location,
+            content,
+            image_url: publicUrl,
+            status: '판매중',
+            year, // 🟢 DB 저장
+            mileage, // 🟢 DB 저장
+          },
+        ]);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('community').insert([
+          {
+            title,
+            content,
+            category: communityCategory,
+            image_url: publicUrl,
+          },
+        ]);
+        if (error) throw error;
+      }
 
-      alert('매물이 성공적으로 등록되었습니다! 🎉');
+      alert('등록되었습니다!');
       router.push('/');
-    } catch (error) {
-      console.error(error);
-      alert('등록 중 오류가 발생했습니다.');
+    } catch (error: any) {
+      alert(error.message || '등록 실패');
     } finally {
       setLoading(false);
     }
@@ -97,45 +108,71 @@ export default function WritePage() {
 
   return (
     <div className="max-w-xl mx-auto p-6 bg-white min-h-screen">
-      <div className="flex items-center mb-8">
+      <div className="flex items-center mb-6">
         <button
           onClick={() => router.back()}
-          className="text-2xl mr-4 cursor-pointer text-gray-500 hover:text-black"
+          className="text-2xl mr-4 text-gray-500"
         >
           ←
         </button>
-        <h1 className="text-2xl font-bold">내 오토바이 팔기</h1>
+        <h1 className="text-2xl font-bold">글쓰기</h1>
+      </div>
+
+      <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
+        <button
+          onClick={() => setActiveTab('market')}
+          className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${
+            activeTab === 'market'
+              ? 'bg-white shadow text-blue-600'
+              : 'text-gray-500'
+          }`}
+        >
+          중고장터
+        </button>
+        <button
+          onClick={() => setActiveTab('community')}
+          className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${
+            activeTab === 'community'
+              ? 'bg-white shadow text-blue-600'
+              : 'text-gray-500'
+          }`}
+        >
+          커뮤니티
+        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 📸 이미지 업로드 UI 복구 */}
+        {activeTab === 'community' && (
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              말머리
+            </label>
+            <div className="flex gap-2">
+              {['자유', '질문', '정보', '모임'].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCommunityCategory(cat)}
+                  className={`px-4 py-2 rounded-full text-xs font-bold border ${
+                    communityCategory === cat
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-500 border-gray-300'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
             사진 등록
           </label>
           <div className="flex items-center gap-4">
-            <label className="w-24 h-24 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition text-gray-400 hover:text-blue-500">
-              {/* 카메라 아이콘 (SVG) */}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-8 h-8 mb-1"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
-                />
-              </svg>
-              <span className="text-xs font-bold">사진 추가</span>
+            <label className="w-20 h-20 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 text-gray-400">
+              <span className="text-2xl">📷</span>
               <input
                 type="file"
                 accept="image/*"
@@ -143,22 +180,16 @@ export default function WritePage() {
                 onChange={handleImageChange}
               />
             </label>
-
-            {/* 미리보기 이미지 */}
             {previewUrl && (
-              <div className="w-24 h-24 rounded-xl overflow-hidden border border-gray-200 relative shadow-sm">
-                <img
-                  src={previewUrl}
-                  alt="미리보기"
-                  className="w-full h-full object-cover"
-                />
+              <div className="w-20 h-20 rounded-xl overflow-hidden relative border">
+                <img src={previewUrl} className="w-full h-full object-cover" />
                 <button
                   type="button"
                   onClick={() => {
                     setPreviewUrl(null);
                     setImageFile(null);
                   }}
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-black"
+                  className="absolute top-0 right-0 bg-black/50 text-white w-5 h-5 flex items-center justify-center text-xs"
                 >
                   ✕
                 </button>
@@ -172,41 +203,69 @@ export default function WritePage() {
             제목
           </label>
           <input
-            type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="예: 22년식 슈퍼커브 팝니다"
-            className="w-full border border-gray-300 rounded-xl p-4 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
+            placeholder={
+              activeTab === 'market'
+                ? '예: 22년식 슈퍼커브 팝니다'
+                : '제목을 입력해주세요'
+            }
+            className="w-full border border-gray-300 rounded-xl p-4 outline-none focus:border-blue-500"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            가격
-          </label>
-          <input
-            type="text"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="예: 150만원"
-            className="w-full border border-gray-300 rounded-xl p-4 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
-          />
-        </div>
+        {activeTab === 'market' && (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              {/* 🟢 연식 & 주행거리 입력 */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  제작 연식
+                </label>
+                <input
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  placeholder="예: 2022년식"
+                  className="w-full border border-gray-300 rounded-xl p-4 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  주행거리
+                </label>
+                <input
+                  value={mileage}
+                  onChange={(e) => setMileage(e.target.value)}
+                  placeholder="예: 5,000km"
+                  className="w-full border border-gray-300 rounded-xl p-4 outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                가격
+              </label>
+              <input
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="예: 150만원"
+                className="w-full border border-gray-300 rounded-xl p-4 outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                거래 지역
+              </label>
+              <input
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="예: 서울 성동구"
+                className="w-full border border-gray-300 rounded-xl p-4 outline-none focus:border-blue-500"
+              />
+            </div>
+          </>
+        )}
 
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            거래 지역
-          </label>
-          <input
-            type="text"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="예: 서울 성동구"
-            className="w-full border border-gray-300 rounded-xl p-4 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
-          />
-        </div>
-
-        {/* 📝 상세 내용 입력창 복구 */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
             상세 내용
@@ -214,17 +273,17 @@ export default function WritePage() {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="물건에 대한 자세한 설명을 적어주세요. (구매 시기, 튜닝 내역, 흠집 등)"
-            className="w-full border border-gray-300 rounded-xl p-4 h-40 resize-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
+            placeholder="내용을 입력해주세요."
+            className="w-full border border-gray-300 rounded-xl p-4 h-40 resize-none outline-none focus:border-blue-500"
           />
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl text-lg hover:bg-blue-700 transition disabled:bg-gray-300 mt-4 shadow-lg shadow-blue-200"
+          className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl text-lg hover:bg-blue-700 transition disabled:bg-gray-300 mt-6 shadow-lg shadow-blue-200"
         >
-          {loading ? '등록 중...' : '매물 등록하기'}
+          {loading ? '등록 중...' : '등록 완료'}
         </button>
       </form>
     </div>
