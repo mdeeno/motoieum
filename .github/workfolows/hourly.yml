@@ -1,0 +1,27 @@
+name: 매시간 매물 크롤링 (중검단 + 바튜매)
+
+on:
+  schedule:
+    - cron: '0 * * * *' # 매시간 0분 실행
+  workflow_dispatch: # 수동 실행 버튼
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 내려받기
+        uses: actions/checkout@v3
+
+      - name: Node.js 설치
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: 패키지 설치
+        run: npm install
+
+      - name: 크롤링 스크립트 실행
+        run: node scripts/crawler.js
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
