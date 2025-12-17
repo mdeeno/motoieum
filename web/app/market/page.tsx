@@ -1,68 +1,108 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // ✅ Link 컴포넌트 추가 (필수!)
-import { supabase } from '../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
-// 데이터 타입 정의
-type Post = {
-  id: number;
-  title: string;
-  content: string;
-  created_at: string;
-  image_url: string | null;
-  price: number | null;
-  category: string;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+declare global {
+  interface Window {
+    kakao: any;
+  }
+}
+
+// 🛠️ 헬퍼 함수: 가격 포맷팅
+const formatPrice = (price: string | null | undefined) => {
+  if (!price || price.trim() === '') return '가격 문의';
+  if (/^\d+$/.test(price)) {
+    const num = parseInt(price, 10);
+    return num >= 10000
+      ? `${Math.floor(num / 10000).toLocaleString()}만원`
+      : `${num.toLocaleString()}원`;
+  }
+  return price;
+};
+
+// 🛠️ 헬퍼 함수: 날짜 포맷팅
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${
+    date.getMinutes() < 10 ? '0' : ''
+  }${date.getMinutes()}`;
 };
 
 export default function MarketPage() {
   const router = useRouter();
-  // 탭 상태: market(장터), community(커뮤니티), map(정비지도)
   const [activeTab, setActiveTab] = useState<'market' | 'community' | 'map'>(
     'market'
   );
+
+  // 데이터 상태
+  const [marketItems, setMarketItems] = useState<any[]>([]);
+  const [communityItems, setCommunityItems] = useState<any[]>([]); // 커뮤니티 데이터 추가
+
+  const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  // 검색 관련 상태
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-
-  // 유저 로그인 상태 체크
+  // 로그인 체크
   useEffect(() => {
     const checkUser = async () => {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
+        data: { session },
+      } = await supabase.auth.getSession();
+      setUser(session?.user || null);
     };
     checkUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null);
-      }
-    );
-    return () => authListener.subscription.unsubscribe();
   }, []);
 
-  const handleLogout = async () => {
-    if (confirm('로그아웃 하시겠습니까?')) {
-      await supabase.auth.signOut();
-      setUser(null);
-      window.location.reload();
+  // 탭 변경에 따른 데이터 로딩
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      if (activeTab === 'market') {
+        const { data } = await supabase
+          .from('market')
+          .select('*')
+          .order('created_at', { ascending: false });
+        setMarketItems(data || []);
+      } else if (activeTab === 'community') {
+        // 🔥 커뮤니티 글 불러오기 (이제 진짜 됩니다!)
+        const { data } = await supabase
+          .from('community')
+          .select('*')
+          .order('created_at', { ascending: false });
+        setCommunityItems(data || []);
+      }
+      setLoading(false);
+    };
+    fetchData();
+  }, [activeTab]);
+
+  const handleItemClick = (item: any) => {
+    if (
+      (item.source === 'junggeomdan' || item.source === 'batumae') &&
+      item.external_link
+    ) {
+      window.open(item.external_link, '_blank');
+    } else {
+      // 상세 페이지 이동 (장터/커뮤니티 구분)
+      const path =
+        activeTab === 'market' ? `/market/${item.id}` : `/community/${item.id}`;
+      router.push(path);
     }
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 font-sans">
-      {/* 🟢 헤더 */}
       <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
-          {/* 로고 & PC버전 탭 */}
-          <div className="flex items-center gap-4 md:gap-10">
+          <div className="flex items-center gap-10">
             <h1
-              className="text-2xl font-black italic tracking-wide text-blue-600 cursor-pointer"
+              className="text-2xl font-black italic text-blue-600 cursor-pointer"
               onClick={() => setActiveTab('market')}
             >
               MOTOIEUM
@@ -85,79 +125,175 @@ export default function MarketPage() {
               />
             </nav>
           </div>
-
-          <div className="flex gap-2 items-center">
-            {/* 🔍 검색창 토글 로직 */}
-            {showSearch ? (
-              <div className="flex items-center bg-gray-100 rounded-full px-3 py-1 animate-fadeIn">
-                <input
-                  type="text"
-                  placeholder="제목 검색..."
-                  className="bg-transparent border-none focus:outline-none text-sm w-32 md:w-48 text-gray-900 placeholder-gray-400"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  autoFocus
-                />
-                <button
-                  onClick={() => {
-                    setShowSearch(false);
-                    setSearchTerm('');
-                  }}
-                  className="text-gray-400 hover:text-red-500 ml-1 font-bold px-1"
-                >
-                  ✕
-                </button>
-              </div>
+          <div className="flex gap-2">
+            {user ? (
+              <button
+                onClick={() => router.push('/mypage')}
+                className="hidden md:block px-5 py-2 bg-gray-100 text-gray-700 rounded-full text-sm font-bold hover:bg-gray-200 transition"
+              >
+                마이페이지
+              </button>
             ) : (
               <button
-                onClick={() => setShowSearch(true)}
-                className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition"
-              >
-                🔍
-              </button>
-            )}
-
-            {/* ✅ 로그인 상태에 따른 버튼 (Link 태그 적용됨) */}
-            {user ? (
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/my"
-                  className="px-3 py-1.5 text-blue-600 text-xs md:text-sm font-bold hover:bg-blue-50 rounded-lg whitespace-nowrap transition flex items-center"
-                >
-                  내 정보
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="px-3 py-1.5 text-gray-400 text-xs md:text-sm hover:bg-gray-100 rounded-lg whitespace-nowrap transition"
-                >
-                  로그아웃
-                </button>
-              </div>
-            ) : (
-              <Link
-                href="/login"
-                className="px-4 py-1.5 bg-gray-900 text-white rounded-full text-xs md:text-sm font-bold hover:bg-gray-800 transition whitespace-nowrap flex items-center justify-center"
+                onClick={() => router.push('/login')}
+                className="hidden md:block px-5 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-800 transition"
               >
                 로그인
-              </Link>
+              </button>
             )}
           </div>
         </div>
       </header>
 
-      {/* 🟠 메인 컨텐츠 영역 */}
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 pb-28 md:pb-8">
+        {/* 1. 중고장터 탭 */}
         {activeTab === 'market' && (
-          <PostListView category="market" searchTerm={searchTerm} />
+          <div className="space-y-6">
+            <h2 className="text-xl font-extrabold text-gray-900 px-2">
+              🔥 실시간 인기 매물
+            </h2>
+            {loading ? (
+              <div className="text-center py-20 text-gray-500">로딩 중...</div>
+            ) : marketItems.length === 0 ? (
+              <div className="text-center py-20 text-gray-500 border-2 border-dashed border-gray-300 rounded-xl bg-white">
+                매물이 없습니다.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {marketItems.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => handleItemClick(item)}
+                    className="group bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-xl transition p-4 cursor-pointer overflow-hidden relative"
+                  >
+                    <div className="h-48 bg-gray-100 rounded-xl mb-4 flex items-center justify-center overflow-hidden text-gray-400 relative border border-gray-100">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-3xl">🏍️</span>
+                          <span className="text-sm font-medium">
+                            이미지 없음
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute top-3 left-3 flex gap-1">
+                        {item.source === 'junggeomdan' ? (
+                          <span className="bg-green-600 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm">
+                            ✅ 중검단
+                          </span>
+                        ) : item.source === 'batumae' ? (
+                          <span className="bg-gray-800 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm">
+                            🏍️ 바튜매
+                          </span>
+                        ) : (
+                          <span className="bg-blue-600 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm">
+                            ⚡ MOTOIEUM
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <h3 className="font-bold text-gray-900 text-lg mb-2 truncate">
+                      {item.title}
+                    </h3>
+                    <div className="flex flex-wrap gap-2 text-sm text-gray-600 mb-3 font-medium">
+                      {item.year && (
+                        <span className="bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">
+                          {/^\d+$/.test(item.year)
+                            ? `${item.year} 년식`
+                            : item.year}
+                        </span>
+                      )}
+                      {item.mileage && (
+                        <span className="bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">{`${parseInt(
+                          item.mileage.replace(/[^0-9]/g, '') || '0'
+                        ).toLocaleString()} km`}</span>
+                      )}
+                      {!item.year && !item.mileage && (
+                        <span>{item.location}</span>
+                      )}
+                    </div>
+                    <div className="font-extrabold text-2xl text-blue-700">
+                      {formatPrice(item.price)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
+
+        {/* 2. 커뮤니티 탭 (🔥 이제 진짜 나옵니다!) */}
         {activeTab === 'community' && (
-          <PostListView category="community" searchTerm={searchTerm} />
+          <div className="space-y-6">
+            <h2 className="text-xl font-extrabold text-gray-900 px-2">
+              🗣️ 라이더 커뮤니티
+            </h2>
+            {loading ? (
+              <div className="text-center py-20 text-gray-500">로딩 중...</div>
+            ) : communityItems.length === 0 ? (
+              <div className="text-center py-20 text-gray-500 border-2 border-dashed border-gray-300 rounded-xl bg-white">
+                등록된 글이 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {communityItems.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => handleItemClick(item)}
+                    className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer flex gap-4"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-bold">
+                          {item.category || '자유'}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {formatDate(item.created_at)}
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-gray-900 text-lg mb-1">
+                        {item.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 line-clamp-1">
+                        {item.content}
+                      </p>
+                    </div>
+                    {item.image_url && (
+                      <div className="w-20 h-20 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
+                        <img
+                          src={item.image_url}
+                          className="w-full h-full object-cover"
+                          alt="썸네일"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
-        {activeTab === 'map' && <ShopListView />}
+
+        {/* 3. 지도 탭 (기능 업그레이드됨!) */}
+        {activeTab === 'map' && <KakaoMap user={user} />}
       </main>
 
-      {/* 🔵 모바일 하단 탭바 */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-20 safe-area-pb z-40 rounded-t-2xl shadow-[0_-5px_10px_rgba(0,0,0,0.05)]">
+      {/* 글쓰기 버튼 */}
+      {activeTab !== 'map' && (
+        <button
+          onClick={() => router.push('/write')}
+          className="fixed bottom-24 right-5 md:bottom-12 md:right-12 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl text-3xl flex items-center justify-center hover:bg-blue-700 active:scale-95 transition z-50 cursor-pointer"
+        >
+          +
+        </button>
+      )}
+
+      {/* 모바일 탭바 */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-20 safe-area-pb z-40 rounded-t-2xl shadow-[0_-4px_15px_rgba(0,0,0,0.08)]">
         <MobileTabButton
           label="장터"
           icon="🏷️"
@@ -176,254 +312,322 @@ export default function MarketPage() {
           isActive={activeTab === 'map'}
           onClick={() => setActiveTab('map')}
         />
-        {/* 모바일 하단 탭 내정보/로그인 버튼 */}
-        {user ? (
-          <Link
-            href="/my"
-            className="flex flex-col items-center justify-center w-full h-full cursor-pointer active:scale-95 transition-all"
-          >
-            <span className="text-2xl opacity-50 grayscale">👤</span>
-            <span className="text-xs font-bold text-gray-400">내정보</span>
-          </Link>
-        ) : (
-          <Link
-            href="/login"
-            className="flex flex-col items-center justify-center w-full h-full cursor-pointer active:scale-95 transition-all"
-          >
-            <span className="text-2xl opacity-50 grayscale">👤</span>
-            <span className="text-xs font-bold text-gray-400">로그인</span>
-          </Link>
-        )}
+        <MobileTabButton
+          label="마이"
+          icon="👤"
+          isActive={false}
+          onClick={() => router.push(user ? '/mypage' : '/login')}
+        />
       </nav>
-
-      {/* 🔵 글쓰기 플로팅 버튼 (지도 탭 아닐 때만 보임) */}
-      {activeTab !== 'map' && (
-        <button
-          onClick={() => router.push('/write')}
-          className="fixed bottom-24 right-5 md:bottom-12 md:right-12 bg-blue-600 hover:bg-blue-700 text-white w-14 h-14 md:w-16 md:h-16 rounded-full shadow-2xl text-3xl flex items-center justify-center active:scale-90 transition-all z-50 cursor-pointer"
-        >
-          <span className="-mt-1 font-light">+</span>
-        </button>
-      )}
     </div>
   );
 }
 
-// --------------------------------------------------------
-// 📋 하위 컴포넌트: 게시글 리스트 (장터/커뮤니티 공용)
-// --------------------------------------------------------
-function PostListView({
-  category,
-  searchTerm,
-}: {
-  category: string;
-  searchTerm: string;
-}) {
-  const router = useRouter();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+// 🗺️ 지도 컴포넌트 (검색 결과 리스트 & 즐겨찾기 목록 추가)
+function KakaoMap({ user }: { user: any }) {
+  const mapRef = useRef<any>(null);
+  const [keyword, setKeyword] = useState('');
+  const [selectedPlace, setSelectedPlace] = useState<any>(null);
+
+  // 추가된 상태들
+  const [searchResults, setSearchResults] = useState<any[]>([]); // 검색 결과 리스트
+  const [showBookmarks, setShowBookmarks] = useState(false); // 즐겨찾기 목록 표시 여부
+  const [bookmarks, setBookmarks] = useState<any[]>([]); // 내 즐겨찾기 데이터
 
   useEffect(() => {
-    const fetchPosts = async () => {
-      setLoading(true);
-      let query = supabase
-        .from('posts')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const intervalId = setInterval(() => {
+      if (window.kakao && window.kakao.maps) {
+        clearInterval(intervalId);
+        window.kakao.maps.load(() => {
+          const container = document.getElementById('map');
+          if (!container) return;
+          const options = {
+            center: new window.kakao.maps.LatLng(37.566826, 126.9786567),
+            level: 3,
+          };
+          const map = new window.kakao.maps.Map(container, options);
+          mapRef.current = map;
 
-      // 카테고리 필터링
-      if (category === 'market') {
-        query = query.or(`category.eq.market,category.is.null`);
-      } else {
-        query = query.eq('category', 'community');
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+              const locPosition = new window.kakao.maps.LatLng(
+                position.coords.latitude,
+                position.coords.longitude
+              );
+              map.setCenter(locPosition);
+              new window.kakao.maps.Marker({
+                map: map,
+                position: locPosition,
+                image: new window.kakao.maps.MarkerImage(
+                  'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png',
+                  new window.kakao.maps.Size(30, 30)
+                ),
+              });
+            });
+          }
+        });
       }
+    }, 100);
+    return () => clearInterval(intervalId);
+  }, []);
 
-      // 검색어 필터링
-      if (searchTerm) {
-        query = query.ilike('title', `%${searchTerm}%`);
-      }
+  // 즐겨찾기 목록 불러오기
+  const fetchBookmarks = async () => {
+    if (!user) return alert('로그인이 필요합니다.');
+    const { data } = await supabase
+      .from('map_bookmarks')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setBookmarks(data || []);
+    setShowBookmarks(true); // 목록 열기
+  };
 
-      const { data, error } = await query;
-      if (error) console.error(error);
-      else setPosts(data || []);
-      setLoading(false);
-    };
+  // 검색 실행
+  const searchPlaces = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!keyword.trim()) return alert('검색어를 입력해주세요!');
+    if (!window.kakao || !window.kakao.maps) return;
 
-    fetchPosts();
-  }, [category, searchTerm]);
+    window.kakao.maps.load(() => {
+      const ps = new window.kakao.maps.services.Places();
+      ps.keywordSearch(keyword, (data: any, status: any) => {
+        if (status === window.kakao.maps.services.Status.OK) {
+          setSearchResults(data); // 🔥 검색 결과 리스트에 저장
+          displayMarkers(data);
+        } else if (status === window.kakao.maps.services.Status.ZERO_RESULT) {
+          alert('검색 결과가 없습니다.');
+          setSearchResults([]);
+        }
+      });
+    });
+  };
+
+  const displayMarkers = (places: any[]) => {
+    const map = mapRef.current;
+    const bounds = new window.kakao.maps.LatLngBounds();
+    places.forEach((place) => {
+      const marker = new window.kakao.maps.Marker({
+        map: map,
+        position: new window.kakao.maps.LatLng(place.y, place.x),
+      });
+      window.kakao.maps.event.addListener(marker, 'click', () => {
+        setSelectedPlace(place);
+        map.panTo(new window.kakao.maps.LatLng(place.y, place.x));
+      });
+      bounds.extend(new window.kakao.maps.LatLng(place.y, place.x));
+    });
+    map.setBounds(bounds);
+  };
+
+  // 장소 클릭 시 이동
+  const moveToPlace = (place: any) => {
+    if (!mapRef.current) return;
+    const moveLatLon = new window.kakao.maps.LatLng(place.y, place.x);
+    mapRef.current.panTo(moveLatLon);
+    setSelectedPlace(place);
+    setSearchResults([]); // 이동 후 검색 목록 닫기
+    setShowBookmarks(false); // 즐겨찾기 목록도 닫기
+  };
+
+  const handleBookmark = async (place: any) => {
+    if (!user) return alert('로그인이 필요한 기능입니다.');
+    if (confirm(`'${place.place_name}'을(를) 즐겨찾기에 추가하시겠습니까?`)) {
+      await supabase.from('map_bookmarks').insert([
+        {
+          user_id: user.id,
+          place_name: place.place_name,
+          address: place.address_name,
+          phone: place.phone,
+          lat: parseFloat(place.y),
+          lng: parseFloat(place.x),
+          place_url: place.place_url,
+        },
+      ]);
+      alert('저장되었습니다! ⭐');
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-extrabold px-2 text-gray-800">
-        {searchTerm
-          ? `🔍 '${searchTerm}' 검색 결과`
-          : category === 'market'
-          ? '🔥 실시간 인기 매물'
-          : '🗣️ 라이더들의 수다'}
-      </h2>
+    <div className="relative w-full h-[70vh] rounded-3xl overflow-hidden border border-gray-200 shadow-md">
+      <div id="map" className="w-full h-full bg-gray-100"></div>
 
-      {loading ? (
-        <div className="text-center py-20 text-gray-400">로딩 중...</div>
-      ) : posts.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
-          <p>
-            {searchTerm
-              ? '검색 결과가 없어요 😢'
-              : '아직 등록된 글이 없어요 😢'}
-          </p>
-        </div>
-      ) : (
-        <div
-          className={
-            category === 'market'
-              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5'
-              : 'flex flex-col gap-3'
-          }
+      {/* 🔍 상단 검색창 */}
+      <div className="absolute top-4 left-4 right-4 z-10 flex gap-2">
+        <form
+          onSubmit={searchPlaces}
+          className="flex-1 bg-white rounded-xl shadow-lg flex overflow-hidden p-1"
         >
-          {posts.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => router.push(`/market/${item.id}`)}
-              className={`group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition cursor-pointer overflow-hidden ${
-                category === 'market'
-                  ? 'flex flex-row sm:flex-col h-36 sm:h-auto'
-                  : 'p-5 flex items-center justify-between'
-              }`}
+          <input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="장소, 주소 검색"
+            className="flex-1 px-4 py-2 outline-none text-gray-900"
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 text-white px-4 rounded-lg font-bold"
+          >
+            검색
+          </button>
+        </form>
+        {/* ⭐ 즐겨찾기 목록 버튼 */}
+        <button
+          onClick={fetchBookmarks}
+          className="bg-yellow-400 text-white w-12 rounded-xl shadow-lg font-bold text-xl flex items-center justify-center"
+        >
+          ⭐
+        </button>
+      </div>
+
+      {/* 📋 검색 결과 리스트 (미리보기) */}
+      {searchResults.length > 0 && (
+        <div className="absolute top-16 left-4 right-4 bg-white rounded-xl shadow-xl max-h-60 overflow-y-auto z-20 border border-gray-200">
+          <div className="p-2 sticky top-0 bg-gray-50 border-b flex justify-between items-center">
+            <span className="text-xs font-bold text-gray-500">
+              검색 결과 {searchResults.length}개
+            </span>
+            <button
+              onClick={() => setSearchResults([])}
+              className="text-gray-400 text-lg px-2"
             >
-              {category === 'market' ? (
-                <>
-                  <div className="w-32 sm:w-full sm:h-52 bg-gray-100 relative overflow-hidden shrink-0">
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        alt="상품"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">
-                        No Image
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 flex flex-col justify-between flex-1">
-                    <div>
-                      <h3 className="font-bold text-gray-900 line-clamp-2 mb-1 text-sm sm:text-base">
-                        {item.title}
-                      </h3>
-                      <div className="text-gray-400 text-xs mb-2 line-clamp-1">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <span className="font-extrabold text-lg sm:text-xl text-gray-900">
-                      {item.price
-                        ? `${item.price.toLocaleString()}원`
-                        : '가격제안'}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex-1 min-w-0 pr-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                        Q&A
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-gray-900 text-base truncate mb-1 group-hover:text-blue-600 transition">
-                      {item.title}
-                    </h3>
-                    <p className="text-gray-500 text-sm line-clamp-1">
-                      {item.content}
-                    </p>
-                  </div>
-                  {item.image_url && (
-                    <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-100">
-                      <img
-                        src={item.image_url}
-                        className="w-full h-full object-cover"
-                        alt="썸네일"
-                      />
-                    </div>
-                  )}
-                </>
-              )}
+              ×
+            </button>
+          </div>
+          {searchResults.map((place, idx) => (
+            <div
+              key={idx}
+              onClick={() => moveToPlace(place)}
+              className="p-3 border-b hover:bg-gray-50 cursor-pointer last:border-0"
+            >
+              <div className="font-bold text-gray-900 text-sm">
+                {place.place_name}
+              </div>
+              <div className="text-xs text-gray-500 truncate">
+                {place.road_address_name || place.address_name}
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* ⭐ 즐겨찾기 목록 (버튼 누르면 나옴) */}
+      {showBookmarks && (
+        <div className="absolute top-16 left-4 right-4 bg-white rounded-xl shadow-xl max-h-60 overflow-y-auto z-20 border border-gray-200 animate-fade-in">
+          <div className="p-2 sticky top-0 bg-yellow-50 border-b flex justify-between items-center">
+            <span className="text-xs font-bold text-yellow-700">
+              ⭐ 내 즐겨찾기 목록
+            </span>
+            <button
+              onClick={() => setShowBookmarks(false)}
+              className="text-gray-400 text-lg px-2"
+            >
+              ×
+            </button>
+          </div>
+          {bookmarks.length === 0 ? (
+            <div className="p-4 text-center text-sm text-gray-500">
+              저장된 장소가 없습니다.
+            </div>
+          ) : (
+            bookmarks.map((bm) => (
+              <div
+                key={bm.id}
+                onClick={() =>
+                  moveToPlace({
+                    y: bm.lat,
+                    x: bm.lng,
+                    place_name: bm.place_name,
+                    road_address_name: bm.address,
+                    phone: bm.phone,
+                  })
+                }
+                className="p-3 border-b hover:bg-gray-50 cursor-pointer last:border-0"
+              >
+                <div className="font-bold text-gray-900 text-sm">
+                  ⭐ {bm.place_name}
+                </div>
+                <div className="text-xs text-gray-500 truncate">
+                  {bm.address}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* 현위치 버튼 */}
+      <button
+        onClick={() => {
+          if (navigator.geolocation && mapRef.current) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+              mapRef.current.panTo(
+                new window.kakao.maps.LatLng(
+                  pos.coords.latitude,
+                  pos.coords.longitude
+                )
+              );
+            });
+          }
+        }}
+        className="absolute bottom-6 right-4 z-10 bg-white p-3 rounded-full shadow-lg text-gray-700 hover:bg-gray-50 border border-gray-200"
+      >
+        🧭
+      </button>
+
+      {/* 장소 상세 정보 팝업 */}
+      {selectedPlace && (
+        <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.1)] p-6 z-20 animate-slide-up">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">
+                {selectedPlace.place_name}
+              </h3>
+              <p className="text-sm text-gray-500">
+                {selectedPlace.road_address_name || selectedPlace.address_name}
+              </p>
+              {selectedPlace.phone && (
+                <p className="text-sm text-blue-600 mt-1">
+                  📞 {selectedPlace.phone}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setSelectedPlace(null)}
+              className="text-gray-400 text-2xl"
+            >
+              ×
+            </button>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <a
+              href={`https://map.kakao.com/link/to/${selectedPlace.place_name},${selectedPlace.y},${selectedPlace.x}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 bg-yellow-400 text-black py-3 rounded-xl font-bold text-center shadow-sm hover:bg-yellow-500 transition"
+            >
+              길찾기 (Navi)
+            </a>
+            <button
+              onClick={() => handleBookmark(selectedPlace)}
+              className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-200 transition border border-gray-200"
+            >
+              ⭐ 즐겨찾기
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// --------------------------------------------------------
-// 📋 하위 컴포넌트: 카카오 지도 (작동 확인됨)
-// --------------------------------------------------------
-function ShopListView() {
-  useEffect(() => {
-    const loadKakaoMap = () => {
-      // @ts-ignore
-      if (typeof kakao === 'undefined' || !kakao.maps) return;
-
-      // @ts-ignore
-      kakao.maps.load(() => {
-        const container = document.getElementById('map');
-        const options = {
-          // @ts-ignore
-          center: new kakao.maps.LatLng(37.5665, 126.978),
-          level: 3,
-        };
-        // @ts-ignore
-        const map = new kakao.maps.Map(container, options);
-
-        // 예시 마커
-        // @ts-ignore
-        const markerPosition = new kakao.maps.LatLng(37.545, 127.055);
-        // @ts-ignore
-        const marker = new kakao.maps.Marker({
-          position: markerPosition,
-        });
-        marker.setMap(map);
-      });
-    };
-
-    const timer = setInterval(() => {
-      // @ts-ignore
-      if (typeof kakao !== 'undefined') {
-        loadKakaoMap();
-        clearInterval(timer);
-      }
-    }, 100);
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <div className="h-[calc(100vh-200px)] w-full relative">
-      <div
-        id="map"
-        className="w-full h-full rounded-xl overflow-hidden shadow-inner bg-gray-100"
-      ></div>
-      <div className="absolute bottom-4 left-4 right-4 bg-white p-4 rounded-xl shadow-lg z-10 opacity-95">
-        <h3 className="font-bold text-gray-800">🛵 내 주변 정비소 (Kakao)</h3>
-        <p className="text-xs text-gray-500">지도를 움직여서 찾아보세요.</p>
-      </div>
-    </div>
-  );
-}
-
-// --------------------------------------------------------
-// 🔧 유틸 컴포넌트들
-// --------------------------------------------------------
 function HeaderTab({ label, isActive, onClick }: any) {
   return (
     <button
       onClick={onClick}
-      className={`px-5 py-2.5 rounded-full text-base font-bold transition-all ${
+      className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all ${
         isActive
-          ? 'bg-blue-600 text-white shadow-md scale-105'
-          : 'text-gray-500 hover:bg-gray-100'
+          ? 'bg-blue-600 text-white shadow-sm'
+          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
       }`}
     >
       {label}
@@ -435,18 +639,20 @@ function MobileTabButton({ label, icon, isActive, onClick }: any) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center justify-center w-full h-full cursor-pointer active:scale-95 transition-all"
+      className="flex flex-col items-center justify-center w-full h-full cursor-pointer group"
     >
       <span
-        className={`text-2xl transition-all ${
-          isActive ? '-translate-y-1' : 'opacity-50 grayscale'
+        className={`text-2xl transition-all duration-300 ${
+          isActive
+            ? '-translate-y-1 text-blue-600'
+            : 'text-gray-400 group-hover:text-gray-600'
         }`}
       >
         {icon}
       </span>
       <span
-        className={`text-xs font-bold transition-all ${
-          isActive ? 'text-blue-600' : 'text-gray-400'
+        className={`text-[11px] font-bold mt-1 transition-all ${
+          isActive ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'
         }`}
       >
         {label}
