@@ -17,14 +17,14 @@ declare global {
 
 // 🛠️ 헬퍼 함수: 가격 포맷팅
 const formatPrice = (price: string | null | undefined) => {
-  if (!price || price.trim() === '') return '가격 문의';
-  if (/^\d+$/.test(price)) {
-    const num = parseInt(price, 10);
-    return num >= 10000
-      ? `${Math.floor(num / 10000).toLocaleString()}만원`
-      : `${num.toLocaleString()}원`;
-  }
-  return price;
+  if (!price || price === '가격 문의' || price.trim() === '')
+    return '가격 문의';
+  const numStr = price.toString().replace(/[^0-9]/g, '');
+  if (!numStr) return price;
+  const num = parseInt(numStr, 10);
+  return num >= 10000
+    ? `${Math.floor(num / 10000).toLocaleString()}만원`
+    : `${num.toLocaleString()}원`;
 };
 
 // 🛠️ 헬퍼 함수: 날짜 포맷팅
@@ -35,6 +35,18 @@ const formatDate = (dateString: string) => {
   }${date.getMinutes()}`;
 };
 
+// 🛠️ 필터용 브랜드 목록
+const BRANDS = [
+  '전체',
+  '혼다',
+  '야마하',
+  '가와사키',
+  '스즈키',
+  'BMW',
+  '할리데이비슨',
+  '베스파',
+];
+
 export default function Home() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'market' | 'community' | 'map'>(
@@ -44,6 +56,10 @@ export default function Home() {
   // 데이터 상태
   const [marketItems, setMarketItems] = useState<any[]>([]);
   const [communityItems, setCommunityItems] = useState<any[]>([]);
+
+  // 🔍 필터 상태 (NEW)
+  const [filteredItems, setFilteredItems] = useState<any[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState('전체');
 
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -69,6 +85,7 @@ export default function Home() {
           .select('*')
           .order('created_at', { ascending: false });
         setMarketItems(data || []);
+        setFilteredItems(data || []); // 초기값 설정
       } else if (activeTab === 'community') {
         const { data } = await supabase
           .from('community')
@@ -80,6 +97,23 @@ export default function Home() {
     };
     fetchData();
   }, [activeTab]);
+
+  // 🔥 브랜드 필터링 로직 (라이트바겐 스타일)
+  useEffect(() => {
+    if (activeTab === 'market') {
+      if (selectedBrand === '전체') {
+        setFilteredItems(marketItems);
+      } else {
+        setFilteredItems(
+          marketItems.filter(
+            (item) =>
+              item.title.includes(selectedBrand) ||
+              (item.content && item.content.includes(selectedBrand))
+          )
+        );
+      }
+    }
+  }, [selectedBrand, marketItems, activeTab]);
 
   const handleItemClick = (item: any) => {
     if (
@@ -95,46 +129,47 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 font-sans">
-      <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
+    <div className="flex flex-col min-h-screen bg-white font-sans text-gray-900">
+      {/* 🔹 헤더 (디자인 개선) */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center">
-          <div className="flex items-center gap-10">
+          <div className="flex items-center gap-8">
             <h1
-              className="text-2xl font-black italic text-blue-600 cursor-pointer"
+              className="text-2xl font-black italic text-blue-600 cursor-pointer tracking-tighter"
               onClick={() => setActiveTab('market')}
             >
               MOTOIEUM
             </h1>
-            <nav className="hidden md:flex gap-3">
-              <HeaderTab
+            <nav className="hidden md:flex gap-1">
+              <NavButton
                 label="중고장터"
-                isActive={activeTab === 'market'}
+                active={activeTab === 'market'}
                 onClick={() => setActiveTab('market')}
               />
-              <HeaderTab
+              <NavButton
                 label="커뮤니티"
-                isActive={activeTab === 'community'}
+                active={activeTab === 'community'}
                 onClick={() => setActiveTab('community')}
               />
-              <HeaderTab
+              <NavButton
                 label="정비지도"
-                isActive={activeTab === 'map'}
+                active={activeTab === 'map'}
                 onClick={() => setActiveTab('map')}
               />
             </nav>
           </div>
-          <div className="flex gap-2">
+          <div>
             {user ? (
               <button
                 onClick={() => router.push('/mypage')}
-                className="hidden md:block px-5 py-2 bg-gray-100 text-gray-700 rounded-full text-sm font-bold hover:bg-gray-200 transition"
+                className="bg-gray-100 text-gray-800 px-4 py-2 rounded-full text-sm font-bold hover:bg-gray-200"
               >
                 마이페이지
               </button>
             ) : (
               <button
                 onClick={() => router.push('/login')}
-                className="hidden md:block px-5 py-2 bg-gray-900 text-white rounded-full text-sm font-bold hover:bg-gray-800 transition"
+                className="bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-blue-700 shadow-md transition"
               >
                 로그인
               </button>
@@ -143,88 +178,156 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-7xl mx-auto p-4 pb-28 md:pb-8">
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 pb-28 md:pb-12">
         {/* 1. 중고장터 탭 */}
         {activeTab === 'market' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-extrabold text-gray-900 px-2">
-              🔥 실시간 인기 매물
-            </h2>
+          <>
+            {/* 🔹 메인 배너 (검색창 포함) */}
+            <div className="bg-gray-900 rounded-3xl p-8 mb-8 text-white relative overflow-hidden shadow-xl">
+              <div className="relative z-10">
+                <h2 className="text-2xl md:text-3xl font-bold mb-2">
+                  원하는 바이크를 찾아보세요.
+                </h2>
+                <p className="text-gray-400 mb-6 text-sm md:text-base">
+                  MOTOIEUM이 엄선한 중고 매물과 정비 정보를 한눈에.
+                </p>
+                <div className="bg-white rounded-xl p-1.5 flex max-w-lg shadow-lg">
+                  <input
+                    className="flex-1 px-4 text-gray-900 outline-none font-medium bg-transparent"
+                    placeholder="모델명, 제조사 검색 (예: 슈퍼커브)"
+                  />
+                  <button className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition">
+                    검색
+                  </button>
+                </div>
+              </div>
+              {/* 장식용 원 */}
+              <div className="absolute -right-10 -top-10 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-30 pointer-events-none"></div>
+            </div>
+
+            {/* 🔹 브랜드 필터 (가로 스크롤) */}
+            <div className="flex gap-2 overflow-x-auto pb-4 mb-6 scrollbar-hide">
+              {BRANDS.map((brand) => (
+                <button
+                  key={brand}
+                  onClick={() => setSelectedBrand(brand)}
+                  className={`px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition border shadow-sm ${
+                    selectedBrand === brand
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-900'
+                  }`}
+                >
+                  {brand}
+                </button>
+              ))}
+            </div>
+
+            {/* 🔹 매물 리스트 Grid */}
+            <div className="flex items-center gap-2 mb-4 px-1">
+              <span className="text-xl">🔥</span>
+              <h3 className="text-xl font-bold text-gray-900">추천 매물</h3>
+              <span className="text-blue-600 font-bold text-sm bg-blue-50 px-2 py-0.5 rounded-full">
+                {filteredItems.length}
+              </span>
+            </div>
+
             {loading ? (
-              <div className="text-center py-20 text-gray-500">로딩 중...</div>
-            ) : marketItems.length === 0 ? (
-              <div className="text-center py-20 text-gray-500 border-2 border-dashed border-gray-300 rounded-xl bg-white">
-                매물이 없습니다.
+              <div className="text-center py-20 text-gray-400 animate-pulse">
+                데이터를 불러오는 중입니다...
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="text-center py-20 text-gray-500 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50">
+                조건에 맞는 매물이 없습니다. 😢
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {marketItems.map((item) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredItems.map((item) => (
                   <div
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className="group bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-xl transition p-4 cursor-pointer overflow-hidden relative"
+                    className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition duration-300 cursor-pointer overflow-hidden flex flex-col h-full"
                   >
-                    <div className="h-48 bg-gray-100 rounded-xl mb-4 flex items-center justify-center overflow-hidden text-gray-400 relative border border-gray-100">
+                    {/* 이미지 영역 */}
+                    <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden">
                       {item.image_url ? (
                         <img
                           src={item.image_url}
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                         />
                       ) : (
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-3xl">🏍️</span>
-                          <span className="text-sm font-medium">
-                            이미지 없음
-                          </span>
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
+                          <span className="text-4xl mb-2">🏍️</span>
+                          <span className="text-xs">No Image</span>
                         </div>
                       )}
+
+                      {/* 뱃지 */}
                       <div className="absolute top-3 left-3 flex gap-1">
                         {item.source === 'junggeomdan' ? (
-                          <span className="bg-green-600 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm">
+                          <span className="bg-green-600/90 backdrop-blur-sm text-white px-2 py-1 rounded-md text-[10px] font-bold shadow-sm">
                             ✅ 중검단
                           </span>
                         ) : item.source === 'batumae' ? (
-                          <span className="bg-gray-800 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm">
+                          <span className="bg-gray-900/90 backdrop-blur-sm text-white px-2 py-1 rounded-md text-[10px] font-bold shadow-sm">
                             🏍️ 바튜매
                           </span>
                         ) : (
-                          <span className="bg-blue-600 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm">
+                          <span className="bg-blue-600/90 backdrop-blur-sm text-white px-2 py-1 rounded-md text-[10px] font-bold shadow-sm">
                             ⚡ MOTOIEUM
                           </span>
                         )}
                       </div>
+
+                      {/* 찜 버튼 (UI 장식) */}
+                      <div className="absolute bottom-3 right-3 bg-white/90 p-1.5 rounded-full text-gray-300 shadow-sm">
+                        <svg
+                          className="w-5 h-5"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                        </svg>
+                      </div>
                     </div>
-                    <h3 className="font-bold text-gray-900 text-lg mb-2 truncate">
-                      {item.title}
-                    </h3>
-                    <div className="flex flex-wrap gap-2 text-sm text-gray-600 mb-3 font-medium">
-                      {item.year && (
-                        <span className="bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">
-                          {/^\d+$/.test(item.year)
-                            ? `${item.year} 년식`
-                            : item.year}
+
+                    {/* 텍스트 영역 */}
+                    <div className="p-4 flex flex-col flex-1">
+                      <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-1">
+                        {item.title}
+                      </h3>
+
+                      <div className="flex gap-2 text-xs text-gray-500 mb-4">
+                        <span className="bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                          {item.year && /^\d+$/.test(item.year)
+                            ? `${item.year}년식`
+                            : item.year || '연식미상'}
                         </span>
-                      )}
-                      {item.mileage && (
-                        <span className="bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">{`${parseInt(
-                          item.mileage.replace(/[^0-9]/g, '') || '0'
-                        ).toLocaleString()} km`}</span>
-                      )}
-                      {!item.year && !item.mileage && (
-                        <span>{item.location}</span>
-                      )}
-                    </div>
-                    <div className="font-extrabold text-2xl text-blue-700">
-                      {formatPrice(item.price)}
+                        <span className="bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                          {item.mileage
+                            ? `${parseInt(
+                                item.mileage.replace(/[^0-9]/g, '') || '0'
+                              ).toLocaleString()}km`
+                            : '키로수 미상'}
+                        </span>
+                      </div>
+
+                      <div className="mt-auto pt-3 border-t border-gray-50 flex justify-between items-center">
+                        <span className="text-xl font-extrabold text-blue-600 tracking-tight">
+                          {formatPrice(item.price)}
+                        </span>
+                        <span className="text-xs text-gray-400 font-medium">
+                          {item.location}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </>
         )}
 
-        {/* 2. 커뮤니티 탭 */}
+        {/* 2. 커뮤니티 탭 (기존 기능 유지) */}
         {activeTab === 'community' && (
           <div className="space-y-6">
             <h2 className="text-xl font-extrabold text-gray-900 px-2">
@@ -276,74 +379,72 @@ export default function Home() {
           </div>
         )}
 
-        {/* 3. 지도 탭 */}
+        {/* 3. 지도 탭 (기존 기능 완벽 복구) */}
         {activeTab === 'map' && <KakaoMap user={user} />}
       </main>
 
-      {/* 👇 Footer 추가: 문의하기 & 저작권 표시 */}
-      <footer className="bg-gray-900 text-gray-400 py-12 mt-10">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+      {/* Footer */}
+      <footer className="bg-gray-50 border-t border-gray-100 py-12">
+        <div className="max-w-7xl mx-auto px-6 text-center md:text-left grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
-            <h2 className="text-white text-2xl font-black italic mb-2">
+            <h2 className="text-xl font-black italic text-gray-300 mb-2">
               MOTOIEUM
             </h2>
-            <p className="text-sm">
-              대한민국 1등 오토바이 통합 플랫폼
+            <p className="text-sm text-gray-500">
+              라이더를 위한 No.1 중고거래 & 정비 플랫폼
               <br />
               중고거래부터 정비지도까지, 라이더를 위한 모든 것.
             </p>
           </div>
-          <div className="flex flex-col md:items-end justify-center">
-            <p className="text-sm font-bold text-white mb-2">
-              고객센터 / 제휴문의
-            </p>
+          <div className="flex flex-col md:items-end text-sm text-gray-500 items-center">
+            <p className="font-bold text-gray-900 mb-1">고객센터 / 제휴문의</p>
             <a
               href="mailto:motoieum@gmail.com"
-              className="text-xl font-bold text-blue-400 hover:text-blue-300 transition underline"
+              className="hover:text-blue-600 transition font-bold text-blue-500"
             >
               motoieum@gmail.com
             </a>
-            <p className="text-xs mt-4 opacity-50">
-              © 2025 MOTOIEUM. All rights reserved.
-            </p>
+            <span className="mt-2 text-xs text-gray-400">
+              © 2025 MOTOIEUM Corp. All rights reserved.
+            </span>
           </div>
         </div>
       </footer>
 
-      {/* 글쓰기 버튼 */}
+      {/* 글쓰기 버튼 (PC 가림 현상 수정됨: md:bottom-28) */}
       {activeTab !== 'map' && (
         <button
           onClick={() => router.push('/write')}
-          className="fixed bottom-24 right-5 md:bottom-34 md:right-12 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl text-3xl flex items-center justify-center hover:bg-blue-700 active:scale-95 transition z-50 cursor-pointer"
+          className="fixed bottom-24 right-5 md:bottom-28 md:right-12 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl text-3xl flex items-center justify-center hover:bg-blue-700 active:scale-95 transition z-50 cursor-pointer"
         >
           +
         </button>
       )}
 
       {/* 모바일 탭바 */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-20 safe-area-pb z-40 rounded-t-2xl shadow-[0_-4px_15px_rgba(0,0,0,0.08)]">
-        <MobileTabButton
-          label="장터"
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-20 pb-2 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        <NavIcon
           icon="🏷️"
-          isActive={activeTab === 'market'}
+          label="장터"
+          active={activeTab === 'market'}
           onClick={() => setActiveTab('market')}
         />
-        <MobileTabButton
-          label="커뮤니티"
+        <NavIcon
           icon="💬"
-          isActive={activeTab === 'community'}
+          label="커뮤니티"
+          active={activeTab === 'community'}
           onClick={() => setActiveTab('community')}
         />
-        <MobileTabButton
-          label="정비지도"
+        <NavIcon
           icon="🗺️"
-          isActive={activeTab === 'map'}
+          label="지도"
+          active={activeTab === 'map'}
           onClick={() => setActiveTab('map')}
         />
-        <MobileTabButton
-          label="마이"
+        <NavIcon
           icon="👤"
-          isActive={false}
+          label="MY"
+          active={false}
           onClick={() => router.push(user ? '/mypage' : '/login')}
         />
       </nav>
@@ -351,7 +452,37 @@ export default function Home() {
   );
 }
 
-// 🗺️ 지도 컴포넌트 (생략 없이 그대로)
+// ✨ 네비게이션 컴포넌트
+function NavButton({ label, active, onClick }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2 rounded-full text-sm font-bold transition ${
+        active
+          ? 'text-blue-600 bg-blue-50'
+          : 'text-gray-500 hover:text-gray-900'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function NavIcon({ icon, label, active, onClick }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center w-full pt-2 ${
+        active ? 'text-blue-600' : 'text-gray-400'
+      }`}
+    >
+      <span className="text-2xl mb-1">{icon}</span>
+      <span className="text-[10px] font-bold">{label}</span>
+    </button>
+  );
+}
+
+// 🗺️ 지도 컴포넌트 (원본 기능 유지)
 function KakaoMap({ user }: { user: any }) {
   const mapRef = useRef<any>(null);
   const [keyword, setKeyword] = useState('');
@@ -634,46 +765,5 @@ function KakaoMap({ user }: { user: any }) {
         </div>
       )}
     </div>
-  );
-}
-
-function HeaderTab({ label, isActive, onClick }: any) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all ${
-        isActive
-          ? 'bg-blue-600 text-white shadow-sm'
-          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function MobileTabButton({ label, icon, isActive, onClick }: any) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center justify-center w-full h-full cursor-pointer group"
-    >
-      <span
-        className={`text-2xl transition-all duration-300 ${
-          isActive
-            ? '-translate-y-1 text-blue-600'
-            : 'text-gray-400 group-hover:text-gray-600'
-        }`}
-      >
-        {icon}
-      </span>
-      <span
-        className={`text-[11px] font-bold mt-1 transition-all ${
-          isActive ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'
-        }`}
-      >
-        {label}
-      </span>
-    </button>
   );
 }
