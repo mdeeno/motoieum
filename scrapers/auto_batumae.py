@@ -1,6 +1,8 @@
 import os
 import time
 import re
+# 👇 이거 꼭 추가해야 합니다
+from dotenv import load_dotenv 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -8,12 +10,18 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from supabase import create_client, Client
 
-# 👇 관리자 키
-url: str = "https://qkzrblzjeuowxwkevpfx.supabase.co" 
-key: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFrenJibHpqZXVvd3h3a2V2cGZ4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTI2OTMwMCwiZXhwIjoyMDgwODQ1MzAwfQ.zdsHm0kIaljLaKM0fCYi_dwVLwMNsDz-__PZTdMvFoo"
+# 👇 .env 파일 로드
+load_dotenv()
+
+# 👇 코드에 비밀번호 직접 적지 않고 가져오기
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_KEY")
+
+# 안전장치
+if not url or not key:
+    raise ValueError("❌ .env 파일이 없거나 키가 설정되지 않았습니다!")
 
 supabase: Client = create_client(url, key)
-
 def clean_number(text):
     return re.sub(r'[^\d]', '', text)
 
