@@ -20,3 +20,8 @@ build
 *.env.local
 web/.env
 web/.env.local
+
+# 5. 파이썬 & 로봇 관련 
+bot_profile/
+__pycache__/
+*.pyc
