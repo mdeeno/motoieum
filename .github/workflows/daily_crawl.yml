@@ -1,0 +1,36 @@
+name: Auto Crawler
+
+on:
+  schedule:
+    # 2시간마다 실행 (UTC 기준 짝수 시간)
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # 깃허브 홈페이지에서 버튼 눌러서 수동 실행 가능
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 저장소 코드 가져오기
+        uses: actions/checkout@v3
+
+      - name: 🐍 파이썬 설정하기
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 📦 라이브러리 설치
+        run: |
+          pip install -r requirements.txt
+
+      - name: 🤖 중검단 로봇 출동 (joongum_bot.py)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python scrapers/joongum_bot.py
+
+      - name: 🏍️ 바튜매 로봇 출동 (auto_batumae.py)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python scrapers/auto_batumae.py
