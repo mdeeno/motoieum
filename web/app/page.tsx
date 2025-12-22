@@ -316,7 +316,7 @@ export default function Home() {
                       item.image_url !==
                         'https://cafe.naver.com/favicon.ico' ? (
                         <img
-                          src={item.image_url}
+                          src={`https://wsrv.nl/?url=${item.image_url}`}
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                           loading="lazy"
                         />
