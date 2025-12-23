@@ -45,8 +45,9 @@ const BRANDS = [
 ];
 
 type CCFilter = 'ALL' | 'OVER125' | 'UNDER125';
-// ✅ [수정] JUNGGEOMDAN -> JOONGUM 으로 변경 (DB 데이터와 통일)
 type SourceFilter = 'ALL' | 'MOTOIEUM' | 'BATUMAE' | 'JOONGUM';
+
+const ITEMS_PER_PAGE = 12;
 
 export default function Home() {
   const router = useRouter();
@@ -56,6 +57,8 @@ export default function Home() {
 
   const [marketItems, setMarketItems] = useState<any[]>([]);
   const [filteredItems, setFilteredItems] = useState<any[]>([]);
+  const [visibleItems, setVisibleItems] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
 
   const [selectedBrand, setSelectedBrand] = useState('전체');
   const [ccFilter, setCcFilter] = useState<CCFilter>('ALL');
@@ -64,13 +67,15 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
 
+  const observerTarget = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => setUser(session?.user || null));
   }, []);
 
-  // 데이터 불러오기
+  // 1. 데이터 불러오기
   useEffect(() => {
     if (activeTab === 'market') {
       const fetchMarket = async () => {
@@ -81,8 +86,6 @@ export default function Home() {
           .order('created_at', { ascending: false });
         if (data) {
           setMarketItems(data);
-          // 초기 로딩 시 필터링 로직을 한 번 태우기 위해 여기서는 setFilteredItems를 직접 호출하지 않거나
-          // 아래 useEffect가 의존성에 의해 실행되도록 둠.
         }
         setLoading(false);
       };
@@ -90,38 +93,72 @@ export default function Home() {
     }
   }, [activeTab]);
 
-  // 🔥 [핵심 수정] 통합 필터링 로직
+  // 2. 🔥 [최종 압축 로직] 공백/태그/쉼표 다 없애고 '배기량+숫자' 확인
   useEffect(() => {
     if (activeTab !== 'market') return;
+
+    setPage(1);
+
     let result = marketItems;
 
-    // 1. 출처 필터 (DB값 'joongum'과 정확히 매칭)
+    // (1) 출처 필터
     if (sourceFilter === 'BATUMAE') {
       result = result.filter((item) => item.source === 'batumae');
     } else if (sourceFilter === 'JOONGUM') {
-      // ✅ 여기서 'junggeomdan'이 아니라 'joongum'을 찾아야 함!
       result = result.filter((item) => item.source === 'joongum');
     } else if (sourceFilter === 'MOTOIEUM') {
-      // 바튜매도 아니고 중검단도 아닌 것들
       result = result.filter(
         (item) => item.source !== 'batumae' && item.source !== 'joongum'
       );
     }
 
-    // 2. 배기량 필터
-    if (ccFilter === 'OVER125') {
-      result = result.filter(
-        (item) =>
-          item.content?.includes('over125') || item.title.includes('125cc초과')
-      );
-    } else if (ccFilter === 'UNDER125') {
-      result = result.filter(
-        (item) =>
-          item.content?.includes('under125') || item.title.includes('125cc미만')
-      );
+    // (2) 배기량 필터
+    if (ccFilter !== 'ALL') {
+      result = result.filter((item) => {
+        // A. 바튜매/모토이음: 기존 방식 유지
+        if (item.source !== 'joongum') {
+          const isTaggedOver =
+            item.content?.includes('over125') ||
+            item.title.includes('125cc초과');
+          const isTaggedUnder =
+            item.content?.includes('under125') ||
+            item.title.includes('125cc미만');
+
+          if (ccFilter === 'OVER125') return isTaggedOver;
+          return isTaggedUnder;
+        }
+
+        // B. 중검단: 무조건 [배기량 -> 숫자]
+        if (item.source === 'joongum' && item.content) {
+          // 1. 전처리: 태그삭제 -> 쉼표삭제 -> 공백(띄어쓰기,줄바꿈) 모두 삭제
+          // 예: "<dt> 배기량 </dt> <dd> 1,000 cc </dd>" -> "배기량1000cc"
+          let compressed = item.content.replace(/<[^>]*>/g, ''); // 태그 삭제
+          compressed = compressed.replace(/,/g, ''); // 쉼표 삭제 ("1,000" -> "1000")
+          compressed = compressed.replace(/\s+/g, ''); // 공백 삭제
+
+          // 2. 압축된 문자열에서 "배기량" 뒤에 오는 "숫자+cc" 찾기
+          // match: 배기량 + (중간에 특수문자 있어도 무시) + (숫자) + cc
+          // 대소문자 무시(i)
+          const match = compressed.match(/배기량.*?(\d+)cc/i);
+
+          if (match) {
+            const cc = parseInt(match[1], 10);
+
+            if (ccFilter === 'OVER125') {
+              return cc > 125;
+            } else {
+              // UNDER125
+              return cc <= 125;
+            }
+          }
+        }
+
+        // "배기량" 정보가 없거나 파싱 실패시 목록에서 제외
+        return false;
+      });
     }
 
-    // 3. 브랜드 필터
+    // (3) 브랜드 필터
     if (selectedBrand !== '전체') {
       if (selectedBrand === '기타') {
         const majorBrands = [
@@ -152,6 +189,37 @@ export default function Home() {
     }
     setFilteredItems(result);
   }, [selectedBrand, ccFilter, sourceFilter, marketItems, activeTab]);
+
+  // 3. 무한 스크롤 데이터 자르기
+  useEffect(() => {
+    const end = page * ITEMS_PER_PAGE;
+    setVisibleItems(filteredItems.slice(0, end));
+  }, [page, filteredItems]);
+
+  // 4. 스크롤 감지
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          visibleItems.length < filteredItems.length
+        ) {
+          setPage((prev) => prev + 1);
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [visibleItems, filteredItems]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 font-sans text-gray-900">
@@ -292,106 +360,113 @@ export default function Home() {
             {loading ? (
               <div className="text-center py-20">로딩 중...</div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-5">
-                {filteredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      // 중검단이나 바튜매 데이터는 새 창으로, 그 외는 내부 이동
-                      if (
-                        item.source === 'joongum' ||
-                        item.source === 'batumae'
-                      ) {
-                        window.open(item.external_link, '_blank');
-                      } else {
-                        // 상세 페이지가 있다면 이동 (현재는 외부링크 우선)
-                        if (item.external_link)
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-5">
+                  {visibleItems.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        if (
+                          item.source === 'joongum' ||
+                          item.source === 'batumae'
+                        ) {
                           window.open(item.external_link, '_blank');
-                      }
-                    }}
-                    className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-lg transition cursor-pointer overflow-hidden flex flex-col group relative"
-                  >
-                    <div className="aspect-square bg-gray-100 relative overflow-hidden">
-                      {item.image_url &&
-                      item.image_url !==
-                        'https://cafe.naver.com/favicon.ico' ? (
-                        <img
-                          src={`https://wsrv.nl/?url=${item.image_url}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-300 text-3xl">
-                          🏍️
-                        </div>
-                      )}
-
-                      {/* 🔥 [수정됨] 출처 뱃지 디자인 및 로직 */}
-                      <div className="absolute top-2 left-2 flex gap-1 z-10">
-                        {item.source === 'joongum' ? (
-                          <span className="bg-yellow-100 text-black px-2 py-1 rounded text-xs font-bold shadow-md">
-                            ✅ 중검단
-                          </span>
-                        ) : item.source === 'batumae' ? (
-                          <span className="bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-bold">
-                            🏍️ 바튜매
-                          </span>
+                        } else {
+                          if (item.external_link)
+                            window.open(item.external_link, '_blank');
+                        }
+                      }}
+                      className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-lg transition cursor-pointer overflow-hidden flex flex-col group relative"
+                    >
+                      <div className="aspect-square bg-gray-100 relative overflow-hidden">
+                        {item.image_url &&
+                        item.image_url !==
+                          'https://cafe.naver.com/favicon.ico' ? (
+                          <img
+                            src={`https://wsrv.nl/?url=${item.image_url}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                            loading="lazy"
+                          />
                         ) : (
-                          <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold shadow-md">
-                            ⚡ MOTOIEUM
-                          </span>
+                          <div className="w-full h-full flex items-center justify-center text-gray-300 text-3xl">
+                            🏍️
+                          </div>
                         )}
+
+                        <div className="absolute top-2 left-2 flex gap-1 z-10">
+                          {item.source === 'joongum' ? (
+                            <span className="bg-yellow-100 text-black px-2 py-1 rounded text-xs font-bold shadow-md">
+                              ✅ 중검단
+                            </span>
+                          ) : item.source === 'batumae' ? (
+                            <span className="bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-bold">
+                              🏍️ 바튜매
+                            </span>
+                          ) : (
+                            <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold shadow-md">
+                              ⚡ MOTOIEUM
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/80 hover:bg-white text-gray-400 hover:text-red-500 transition shadow-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            alert('찜하기 기능은 준비 중입니다!');
+                          }}
+                        >
+                          <Heart className="w-4 h-4 md:w-5 md:h-5" />
+                        </button>
                       </div>
 
-                      <button
-                        className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/80 hover:bg-white text-gray-400 hover:text-red-500 transition shadow-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          alert('찜하기 기능은 준비 중입니다!');
-                        }}
-                      >
-                        <Heart className="w-4 h-4 md:w-5 md:h-5" />
-                      </button>
+                      <div className="p-3 flex flex-col flex-1">
+                        <h4 className="font-bold text-gray-900 text-sm md:text-base line-clamp-2 mb-2 h-10 md:h-12 leading-snug">
+                          {item.title
+                            .replace('[바튜매]', '')
+                            .replace('[중검단]', '')
+                            .trim()}
+                        </h4>
+
+                        <div className="flex flex-wrap gap-2 text-xs md:text-sm font-bold text-gray-500 mb-3">
+                          <span className="bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                            {item.year
+                              ? item.year.includes('년')
+                                ? item.year
+                                : `${item.year}년식`
+                              : '연식미상'}
+                          </span>
+                          <span className="bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                            {item.mileage
+                              ? item.mileage.includes('km')
+                                ? item.mileage
+                                : `${item.mileage}km`
+                              : '0km'}
+                          </span>
+                        </div>
+
+                        <div className="mt-auto flex justify-between items-end">
+                          <span className="text-lg md:text-xl font-extrabold text-blue-600">
+                            {formatPrice(item.price)}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {formatDate(item.created_at)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
+                  ))}
+                </div>
 
-                    <div className="p-3 flex flex-col flex-1">
-                      <h4 className="font-bold text-gray-900 text-sm md:text-base line-clamp-2 mb-2 h-10 md:h-12 leading-snug">
-                        {/* 바튜매 제목에서 불필요한 태그 제거 */}
-                        {item.title
-                          .replace('[바튜매]', '')
-                          .replace('[중검단]', '')
-                          .trim()}
-                      </h4>
-
-                      <div className="flex flex-wrap gap-2 text-xs md:text-sm font-bold text-gray-500 mb-3">
-                        <span className="bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                          {item.year
-                            ? item.year.includes('년')
-                              ? item.year
-                              : `${item.year}년식`
-                            : '연식미상'}
-                        </span>
-                        <span className="bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                          {item.mileage
-                            ? item.mileage.includes('km')
-                              ? item.mileage
-                              : `${item.mileage}km`
-                            : '0km'}
-                        </span>
-                      </div>
-
-                      <div className="mt-auto flex justify-between items-end">
-                        <span className="text-lg md:text-xl font-extrabold text-blue-600">
-                          {formatPrice(item.price)}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          {formatDate(item.created_at)}
-                        </span>
-                      </div>
-                    </div>
+                {visibleItems.length < filteredItems.length && (
+                  <div
+                    ref={observerTarget}
+                    className="h-20 flex justify-center items-center text-gray-400 text-sm"
+                  >
+                    매물 더 불러오는 중... 🏍️
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -500,7 +575,6 @@ function KakaoMap({ user }: { user: any }) {
       ps.keywordSearch(keyword, (data: any, status: any) => {
         if (status === window.kakao.maps.services.Status.OK) {
           setSearchResults(data);
-          // displayMarkers(data); // 마커가 너무 많으면 지도 보기 힘들 수 있으니 주석 처리 가능
         } else if (status === window.kakao.maps.services.Status.ZERO_RESULT) {
           alert('검색 결과가 없습니다.');
           setSearchResults([]);
@@ -515,10 +589,13 @@ function KakaoMap({ user }: { user: any }) {
     mapRef.current.panTo(moveLatLon);
     setSelectedPlace(place);
 
-    // 마커 추가
     new window.kakao.maps.Marker({
       map: mapRef.current,
       position: moveLatLon,
+      image: new window.kakao.maps.MarkerImage(
+        'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png',
+        new window.kakao.maps.Size(30, 30)
+      ),
     });
 
     setSearchResults([]);
@@ -733,7 +810,7 @@ function NavIcon({ icon, label, active, onClick }: any) {
       }`}
     >
       <span className="text-xl mb-0.5">{icon}</span>
-      <span className="text-[10px] font-bold">{label}</span>
+      <span className="text-xs font-bold">{label}</span>
     </button>
   );
 }
