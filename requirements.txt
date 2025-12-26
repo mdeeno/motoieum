@@ -1,6 +1,4 @@
-webdriver-manager
 supabase
 python-dotenv
-supabase
 requests
 beautifulsoup4
