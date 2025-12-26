@@ -241,27 +241,38 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col gap-4 mb-6">
-              <div className="flex flex-wrap gap-2 items-center bg-white p-2 rounded-xl shadow-sm border w-fit">
-                {['ALL', 'MOTOIEUM', 'BATUMAE', 'JOONGUM'].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleFilterChange('source', s)}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      sourceFilter === s
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-gray-500'
-                    }`}
-                  >
-                    {s === 'ALL'
-                      ? '전체'
-                      : s === 'JOONGUM'
-                      ? '중검단'
-                      : s === 'BATUMAE'
-                      ? '바튜매'
-                      : '모토이음'}
-                  </button>
-                ))}
+              {/* ✅ 글쓰기 버튼 정렬 복구 */}
+              <div className="flex justify-between items-center flex-wrap gap-4">
+                <div className="flex flex-wrap gap-2 items-center bg-white p-2 rounded-xl shadow-sm border w-fit">
+                  {['ALL', 'MOTOIEUM', 'BATUMAE', 'JOONGUM'].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleFilterChange('source', s)}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        sourceFilter === s
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'text-gray-500'
+                      }`}
+                    >
+                      {s === 'ALL'
+                        ? '전체'
+                        : s === 'JOONGUM'
+                        ? '중검단'
+                        : s === 'BATUMAE'
+                        ? '바튜매'
+                        : '모토이음'}
+                    </button>
+                  ))}
+                </div>
+                {/* 사라졌던 글쓰기 버튼 복구 */}
+                <button
+                  onClick={() => router.push('/market/write')}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition"
+                >
+                  <PlusCircle size={20} /> 매물 등록
+                </button>
               </div>
+
               <div className="flex flex-wrap gap-2 items-center bg-white p-2 rounded-xl shadow-sm border w-fit">
                 {['ALL', 'OVER125', 'UNDER125'].map((c) => (
                   <button
@@ -304,61 +315,89 @@ export default function Home() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {visibleItems.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => window.open(item.external_link, '_blank')}
-                    className="bg-white rounded-2xl border border-gray-100 overflow-hidden cursor-pointer shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col group"
-                  >
-                    <div className="aspect-square bg-gray-100 relative">
-                      <img
-                        src={
-                          item.image_url.includes('favicon')
-                            ? 'https://cafe.naver.com/favicon.ico'
-                            : `https://wsrv.nl/?url=${encodeURIComponent(
-                                item.image_url
-                              )}`
-                        }
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        alt={item.title}
-                      />
-                      <div className="absolute top-3 left-3">
-                        <span
-                          className={`px-2 py-1 rounded-md text-[10px] font-bold text-white shadow-md ${
-                            item.source === 'joongum'
-                              ? 'bg-yellow-500'
-                              : 'bg-blue-600'
-                          }`}
+                {visibleItems.map((item) => {
+                  // ✅ 금액: 원 단위를 만원 단위로 가공
+                  const rawPrice = Number(item.price.replace(/[^\d]/g, ''));
+                  const displayPrice =
+                    isNaN(rawPrice) || rawPrice === 0
+                      ? item.price
+                      : `${Math.floor(rawPrice / 10000)}만원`;
+
+                  // ✅ 주행거리: 숫자만 추출 후 콤마 + km 추가
+                  const displayMileage = item.mileage
+                    ? `${Number(
+                        item.mileage.replace(/[^\d]/g, '')
+                      ).toLocaleString()}km`
+                    : '0km';
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => window.open(item.external_link, '_blank')}
+                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden cursor-pointer shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col group"
+                    >
+                      <div className="aspect-square bg-gray-100 relative">
+                        <img
+                          src={
+                            item.image_url.includes('favicon')
+                              ? 'https://cafe.naver.com/favicon.ico'
+                              : `https://wsrv.nl/?url=${encodeURIComponent(
+                                  item.image_url
+                                )}`
+                          }
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          alt={item.title}
+                        />
+                        <div className="absolute top-3 left-3">
+                          <span
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold text-white shadow-md ${
+                              item.source === 'joongum'
+                                ? 'bg-yellow-500'
+                                : 'bg-blue-600'
+                            }`}
+                          >
+                            {item.source === 'joongum'
+                              ? '✅ 중검단'
+                              : item.source === 'batumae'
+                              ? '🏍️ 바튜매'
+                              : '⚡ 모토이음'}
+                          </span>
+                        </div>
+                        <button
+                          className="absolute top-3 right-3 p-1.5 rounded-full bg-white/70 hover:bg-white text-gray-400 hover:text-red-500 transition shadow-sm"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {item.source === 'joongum'
-                            ? '✅ 중검단'
-                            : item.source === 'batumae'
-                            ? '🏍️ 바튜매'
-                            : '⚡ 모토이음'}
-                        </span>
+                          <Heart size={16} />
+                        </button>
                       </div>
-                      <button
-                        className="absolute top-3 right-3 p-1.5 rounded-full bg-white/70 hover:bg-white text-gray-400 hover:text-red-500 transition shadow-sm"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Heart size={16} />
-                      </button>
-                    </div>
-                    <div className="p-4 flex flex-col flex-1">
-                      <h4 className="font-bold text-gray-900 text-sm line-clamp-2 h-10 leading-snug mb-3">
-                        {item.title}
-                      </h4>
-                      <div className="mt-auto flex justify-between items-end">
-                        <span className="text-blue-600 font-black text-lg">
-                          {item.price}
-                        </span>
-                        <span className="text-[10px] text-gray-400">
-                          {item.created_at.split('T')[0]}
-                        </span>
+
+                      <div className="p-4 flex flex-col flex-1">
+                        <h4 className="font-bold text-gray-900 text-sm line-clamp-2 h-10 leading-snug mb-1">
+                          {item.title}
+                        </h4>
+
+                        <div className="flex gap-2 text-[10px] text-gray-400 mb-3">
+                          <span>
+                            {item.year ? `${item.year}년식` : '연식미상'}
+                          </span>
+                          <span>•</span>
+                          <span>{displayMileage}</span>
+                        </div>
+
+                        <div className="mt-auto flex justify-between items-end">
+                          <div className="flex flex-col">
+                            <span className="text-blue-600 font-black text-lg">
+                              {displayPrice}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-gray-400">
+                            {item.created_at.split('T')[0]}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <div ref={observerTarget} className="h-10" />
@@ -423,7 +462,7 @@ export default function Home() {
   );
 }
 
-// --- 🗺️ 지도 컴포넌트 (SDK 로딩 로직 최종 강화) ---
+// --- 🗺️ 지도 컴포넌트 (로딩 로직 최적화) ---
 function KakaoMap({ user }: { user: any }) {
   const router = useRouter();
   const mapRef = useRef<any>(null);
@@ -432,10 +471,10 @@ function KakaoMap({ user }: { user: any }) {
   const [selectedPlace, setSelectedPlace] = useState<KakaoPlace | null>(null);
 
   useEffect(() => {
-    // 1. 카카오맵 스크립트 강제 삽입 (autoload=false 필수)
     const KAKAO_KEY = process.env.NEXT_PUBLIC_KAKAO_MAP_KEY;
     const existingScript = document.getElementById('kakao-map-sdk');
 
+    // 스크립트가 없으면 생성
     if (!existingScript) {
       const script = document.createElement('script');
       script.id = 'kakao-map-sdk';
@@ -443,27 +482,28 @@ function KakaoMap({ user }: { user: any }) {
       document.head.appendChild(script);
     }
 
-    // 2. SDK 로드 후 지도 초기화 함수
     const initMap = () => {
-      window.kakao.maps.load(() => {
-        const container = document.getElementById('map');
-        if (container && !mapRef.current) {
-          const options = {
-            center: new window.kakao.maps.LatLng(37.5665, 126.978),
-            level: 3,
-          };
-          mapRef.current = new window.kakao.maps.Map(container, options);
-        }
-      });
+      if (window.kakao && window.kakao.maps) {
+        window.kakao.maps.load(() => {
+          const container = document.getElementById('map');
+          if (container && !mapRef.current) {
+            const options = {
+              center: new window.kakao.maps.LatLng(37.5665, 126.978),
+              level: 3,
+            };
+            mapRef.current = new window.kakao.maps.Map(container, options);
+          }
+        });
+      }
     };
 
-    // 3. window.kakao 객체가 생길 때까지 대기
+    // 객체 확인 인터벌
     const checkTimer = setInterval(() => {
       if (window.kakao && window.kakao.maps) {
         initMap();
         clearInterval(checkTimer);
       }
-    }, 300);
+    }, 200);
 
     return () => clearInterval(checkTimer);
   }, []);
@@ -493,7 +533,6 @@ function KakaoMap({ user }: { user: any }) {
 
   return (
     <div className="relative w-full h-[75vh] md:h-[70vh] rounded-3xl overflow-hidden border shadow-2xl bg-white">
-      {/* ⚠️ 인라인 스타일로 높이를 강제 부여하여 영역을 확보합니다 */}
       <div
         id="map"
         className="w-full h-full"

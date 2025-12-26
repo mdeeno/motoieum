@@ -48,8 +48,12 @@ def run_batumae_crawler():
 
             soup = BeautifulSoup(res.text, 'html.parser')
 
-            # 2. 게시글 목록 찾기
+            # 2. 게시글 목록 찾기 (✅ 에러 해결을 위해 선택자 보강)
             rows = soup.select('div.article-board > table > tbody > tr')
+            
+            # 선택자 보강: 위 방식이 실패할 경우를 대비한 백업 선택자
+            if not rows:
+                rows = soup.select('#main-area > div.article-board > table > tbody > tr')
             
             # 목록이 비었거나 공지사항만 있는 경우 체크
             if not rows:
